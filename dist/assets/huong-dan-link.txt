@@ -1,0 +1,5 @@
+1. Mở Công cụ quảng bá và sao chép link của đúng kênh hoặc chiến dịch.
+2. Dán link vào bài đăng hoặc bio và kiểm tra lại trước khi chia sẻ.
+3. Vào Hiệu quả giới thiệu để đối chiếu lượt nhấp, đăng ký và đơn Plus theo nguồn.
+
+Link trong bản demo chỉ ghi nhận hành vi mô phỏng trên trình duyệt.
