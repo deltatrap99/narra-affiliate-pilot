@@ -60,9 +60,20 @@ export function empty(label, body = 'Thử đổi bộ lọc hoặc chọn một
   return `<div class="empty"><span class="empty-icon">${icon(symbol)}</span><strong>${esc(label)}</strong>${body ? `<p>${esc(body)}</p>` : ''}</div>`;
 }
 
-export function table(headers, rows, emptyTitle = 'Chưa có dữ liệu', emptyBody) {
+export function table(headers, rows, emptyTitle = 'Chưa có dữ liệu', emptyBody, requestedPage = null) {
   if (!rows.length) return empty(emptyTitle, emptyBody);
-  return `<div class="table-scroll" role="region" aria-label="Bảng dữ liệu" tabindex="0"><table><thead><tr>${headers.map(title => `<th scope="col">${esc(title)}</th>`).join('')}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+  const pageSize = 12;
+  const pages = requestedPage ? Math.ceil(rows.length / pageSize) : 1;
+  const page = Math.max(1, Math.min(pages, requestedPage ?? 1));
+  const start = (page - 1) * pageSize;
+  const visible = requestedPage ? rows.slice(start, start + pageSize) : rows;
+  const arrow = (step, label, glyph, disabled) =>
+    `<button class="icon-button" type="button" data-action="table-page" data-value="${page + step}" aria-label="${label}" title="${label}" ${disabled ? 'disabled' : ''}>${icon(glyph)}</button>`;
+  const pager = pages > 1 ? `<nav class="table-pager" aria-label="Phân trang">
+    <span class="page-counter" tabindex="-1">${number(start + 1)}-${number(start + visible.length)} / ${number(rows.length)} kết quả</span>
+    <div>${arrow(-1, 'Trang trước', 'chevron_left', page === 1)}${arrow(1, 'Trang sau', 'chevron_right', page === pages)}</div>
+  </nav>` : '';
+  return `<div class="table-scroll" role="region" aria-label="Bảng dữ liệu" tabindex="0"><table><thead><tr>${headers.map(title => `<th scope="col">${esc(title)}</th>`).join('')}</tr></thead><tbody>${visible.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`).join('')}</tbody></table></div>${pager}`;
 }
 
 export const recordLink = (type, id, label = id) => `<button type="button" class="record-link" data-action="detail" data-type="${type}" data-id="${esc(id)}">${esc(label)}</button>`;

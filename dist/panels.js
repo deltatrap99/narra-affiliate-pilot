@@ -378,7 +378,9 @@ export function detailPanel(ctx, type, id) {
   const entry = finders[type];
   if (!entry) return null;
   const record = ctx.data[entry[0]].find(value => value.id === id);
-  return record ? entry[1](ctx, record) : null;
+  const panel = record ? entry[1](ctx, record) : null;
+  if (panel && ['partner', 'campaign', 'order', 'batch'].includes(type)) panel.presentation = 'record-drawer';
+  return panel;
 }
 
 export const choosePreset = key => presets[key];

@@ -13,6 +13,7 @@ import {
   detailPanel, profilePanel, supportForm, choosePreset,
 } from './panels.js';
 import { mountChart } from './chart.js';
+import { appearanceMenu, commandPanel, commandResults } from './workspace-ui.js';
 
 const shell = document.querySelector('#shell');
 const rail = document.querySelector('#rail');
@@ -43,6 +44,8 @@ let view = { tab: 'list', query: '', status: '', campaign: '', link: '' };
 let grain = preferences.grain ?? 'day';
 let sidebarWidth = Math.max(minimumWidth, Math.min(maximumWidth, Number(preferences.width) || defaultWidth));
 let collapsed = preferences.collapsed === true;
+let theme = preferences.theme === 'dark' ? 'dark' : 'light';
+let layout = preferences.layout === 'horizontal' ? 'horizontal' : 'vertical';
 let mobileOpen = false;
 let drawerTrigger = null;
 let activePopup = '';
@@ -58,12 +61,12 @@ const pageViews = {
 };
 const resultViews = {
   campaigns: campaignList, partners: partnerList, tools: linkList,
-  orders: ctx => orderTable(ctx, listOrders(ctx)), payouts: payoutList,
+  orders: ctx => orderTable(ctx, listOrders(ctx), true), payouts: payoutList,
 };
 
 function persistPreferences() {
   try {
-    localStorage.setItem(preferencesKey, JSON.stringify({ width: sidebarWidth, collapsed, range, grain }));
+    localStorage.setItem(preferencesKey, JSON.stringify({ width: sidebarWidth, collapsed, range, grain, theme, layout }));
   } catch {}
 }
 
@@ -80,6 +83,11 @@ function navigation() {
   return role === 'merchant' ? merchantNav : affiliateNav;
 }
 
+function allNavigation() {
+  return [...navigation(), ...(role === 'merchant' ? [['system', 'Quản trị hệ thống', 'settings']] : []),
+    ['support', 'Hỗ trợ', 'support_agent']];
+}
+
 function titleForPage() {
   return navigation().find(([key]) => key === page)?.[1] ?? (page === 'system' ? 'Quản trị hệ thống' : 'Hỗ trợ');
 }
@@ -92,6 +100,19 @@ function buttonIcon(name, symbol, label, extra = '') {
   return `<button type="button" class="icon-button ${extra}" data-action="${name}" aria-label="${esc(label)}" title="${esc(label)}">${icon(symbol)}</button>`;
 }
 
+function workspacePicker(id) {
+  const merchant = role === 'merchant';
+  return `<button class="workspace-switch" type="button" data-action="popup" data-value="${id}" aria-controls="${id}" aria-expanded="false" title="Chuyển cổng Narra">
+    <span class="workspace-icon">${icon(merchant ? 'storefront' : 'group')}</span>
+    <span class="workspace-copy"><strong>${workspaceName()}</strong><small>${merchant ? 'Quản trị chương trình' : 'Không gian đại sứ'}</small></span>${icon('expand_more')}
+  </button>
+  <div class="popover workspace-popup" id="${id}" hidden>
+    <div class="popover-title">Chuyển vai trò demo</div>
+    ${[['merchant', 'storefront', 'Quản trị chương trình'], ['affiliate', 'group', 'Dành cho Đại sứ']].map(([key, symbol, info]) =>
+      `<a class="${role === key ? 'active-menu' : ''}" href="${route(key, 'overview')}">${icon(symbol)}<span><strong>${workspaceName(key)}</strong><small>${info}</small></span>${role === key ? icon('check') : ''}</a>`).join('')}
+  </div>`;
+}
+
 function renderRail() {
   const suite = role === 'merchant';
   rail.innerHTML = `<div class="rail-content">
@@ -100,17 +121,7 @@ function renderRail() {
       ${buttonIcon('toggle-sidebar', 'left_panel_close', 'Thu gọn thanh điều hướng', 'rail-toggle')}
       ${buttonIcon('close-sidebar', 'close', 'Đóng thanh điều hướng', 'mobile-close')}
     </div>
-    <div class="rail-switch">
-      <button class="workspace-switch" type="button" data-action="popup" data-value="workspaces" aria-controls="workspaces" aria-expanded="false" title="Chuyển cổng Narra">
-        <span class="workspace-icon">${icon(suite ? 'storefront' : 'group')}</span>
-        <span class="workspace-copy"><strong>${workspaceName()}</strong><small>${suite ? 'Quản trị chương trình' : 'Không gian đại sứ'}</small></span>${icon('expand_more')}
-      </button>
-      <div class="popover workspace-popup" id="workspaces" hidden>
-        <div class="popover-title">Chuyển vai trò demo</div>
-        ${[['merchant', 'storefront', 'Quản trị chương trình'], ['affiliate', 'group', 'Dành cho Đại sứ']].map(([key, symbol, info]) =>
-          `<a class="${role === key ? 'active-menu' : ''}" href="${route(key, 'overview')}">${icon(symbol)}<span><strong>${workspaceName(key)}</strong><small>${info}</small></span>${role === key ? icon('check') : ''}</a>`).join('')}
-      </div>
-    </div>
+    <div class="rail-switch">${workspacePicker("workspaces")}</div>
     <p class="rail-label">${suite ? 'Chương trình' : 'Không gian của bạn'}</p>
     <nav class="rail-nav" aria-label="Nghiệp vụ Narra">${navigation().map(navLink).join('')}</nav>
     ${suite ? `<div class="rail-divider"></div><nav class="rail-nav" aria-label="Quản trị">${navLink(['system', 'Quản trị hệ thống', 'settings'])}</nav>` : ''}
@@ -143,27 +154,38 @@ function renderTopbar() {
   const person = merchant ? { name: 'Narra Admin', tone: 'violet' } : { name: data.profile.name, tone: 'violet' };
   const items = notificationItems();
   const name = titleForPage();
-  topbar.innerHTML = `<div class="breadcrumb" aria-label="Vị trí hiện tại">
-    ${buttonIcon('open-sidebar', 'menu', 'Mở thanh điều hướng', 'mobile-open')}
-    ${buttonIcon('toggle-sidebar', 'left_panel_open', 'Mở rộng thanh điều hướng', 'desktop-open')}
-    <a href="${route(role, 'overview')}">${workspaceName()}</a>${icon('chevron_right', 'crumb-chevron')}<strong>${esc(name)}</strong>
+  const shortcut = /Mac|iPhone|iPad/.test(window.navigator.platform) ? '⌘ K' : 'Ctrl K';
+  topbar.innerHTML = `<div class="topbar-row">
+    <div class="breadcrumb" aria-label="Vị trí hiện tại">
+      ${buttonIcon('open-sidebar', 'menu', 'Mở thanh điều hướng', 'mobile-open')}
+      ${buttonIcon('toggle-sidebar', 'left_panel_open', 'Mở rộng thanh điều hướng', 'desktop-open')}
+      <a class="horizontal-brand" href="${route(role, 'overview')}" aria-label="Narra Affiliate, Tổng quan"><span class="brand-mark" aria-hidden="true">n.</span></a>
+      <div class="horizontal-switch">${workspacePicker('horizontal-workspaces')}</div>
+      <a class="breadcrumb-home" href="${route(role, 'overview')}">${workspaceName()}</a>${icon('chevron_right', 'crumb-chevron')}<strong>${esc(name)}</strong>
+    </div>
+    <div class="top-actions">
+      <button type="button" class="quick-search" data-action="command-search" aria-label="Tìm trong Narra" aria-haspopup="dialog">
+        ${icon('search')}<span>Tìm trong Narra</span><kbd>${shortcut}</kbd>
+      </button>
+      <button type="button" class="icon-button" data-action="popup" data-value="appearance" aria-controls="appearance" aria-expanded="false" aria-label="Giao diện" title="Giao diện">${icon('tune')}</button>
+      <button type="button" class="icon-button" data-action="popup" data-value="notifications" aria-expanded="false" aria-controls="notifications" aria-label="Thông báo" title="Thông báo">${icon('notifications')}${items.length ? '<span class="notification-dot"></span>' : ''}</button>
+      <div class="top-split"></div>
+      <button type="button" class="account-button" data-action="popup" data-value="account" aria-expanded="false" aria-controls="account" aria-label="Tài khoản ${esc(person.name)}">
+        ${avatar(person)}<span class="account-copy"><strong>${esc(person.name)}</strong><small>${merchant ? 'Quản trị viên' : 'Đại sứ Narra'}</small></span>${icon('expand_more')}
+      </button>
+      ${appearanceMenu(theme, layout)}
+      <div class="popover" id="account" hidden>
+        <button type="button" data-action="profile">${icon('person')} Hồ sơ tài khoản</button>
+        <a href="${route(role, 'support')}">${icon('support_agent')} Hỗ trợ</a>
+        <a href="${route(merchant ? 'affiliate' : 'merchant', 'overview')}">${icon('workspaces')}${merchant ? 'Sang cổng Đại sứ' : 'Sang Merchant Center'}</a>
+      </div>
+      <div class="popover notification-menu" id="notifications" hidden>
+        <div class="popover-title">Thông báo</div>
+        ${items.length ? items.map(([key, tab, symbol, text, caption]) => `<a href="${route(role, key, tab)}"><span class="command-icon">${icon(symbol)}</span><span><strong>${esc(text)}</strong><small>${esc(caption)}</small></span></a>`).join('') : '<small class="popover-title">Chưa có thông báo mới.</small>'}
+      </div>
+    </div>
   </div>
-  <div class="top-actions">
-    <button type="button" class="icon-button" data-action="popup" data-value="notifications" aria-expanded="false" aria-controls="notifications" aria-label="Thông báo" title="Thông báo">${icon('notifications')}${items.length ? '<span class="notification-dot"></span>' : ''}</button>
-    <div class="top-split"></div>
-    <button type="button" class="account-button" data-action="popup" data-value="account" aria-expanded="false" aria-controls="account" aria-label="Tài khoản ${esc(person.name)}">
-      ${avatar(person)}<span class="account-copy"><strong>${esc(person.name)}</strong><small>${merchant ? 'Quản trị viên' : 'Đại sứ Narra'}</small></span>${icon('expand_more')}
-    </button>
-    <div class="popover" id="account" hidden>
-      <button type="button" data-action="profile">${icon('person')} Hồ sơ tài khoản</button>
-      <a href="${route(role, 'support')}">${icon('support_agent')} Hỗ trợ</a>
-      <a href="${route(merchant ? 'affiliate' : 'merchant', 'overview')}">${icon('workspaces')}${merchant ? 'Sang cổng Đại sứ' : 'Sang Merchant Center'}</a>
-    </div>
-    <div class="popover notification-menu" id="notifications" hidden>
-      <div class="popover-title">Thông báo</div>
-      ${items.length ? items.map(([key, tab, symbol, text, caption]) => `<a href="${route(role, key, tab)}">${icon(symbol)}<span><strong>${esc(text)}</strong><small>${esc(caption)}</small></span></a>`).join('') : '<small class="popover-title">Bạn đã xem hết thông báo.</small>'}
-    </div>
-  </div>`;
+  <nav class="horizontal-nav" aria-label="Nghiệp vụ Narra">${allNavigation().map(navLink).join('')}</nav>`;
 }
 
 function renderMain() {
@@ -219,18 +241,37 @@ function syncRoute() {
 }
 
 function renderSidebarState() {
-  const compact = collapsed && !mobile.matches;
-  shell.classList.toggle('is-collapsed', compact);
+  const horizontal = layout === 'horizontal' && !mobile.matches;
+  shell.classList.toggle('is-horizontal', horizontal);
+  shell.classList.toggle('is-collapsed', collapsed && !horizontal && !mobile.matches);
   shell.classList.toggle('is-mobile-open', mobileOpen && mobile.matches);
   shell.style.setProperty('--rail-width', sidebarWidth + 'px');
   const separator = document.querySelector('#rail-size');
   separator?.setAttribute('aria-valuenow', sidebarWidth);
   separator?.setAttribute('aria-valuetext', sidebarWidth + ' pixel');
   topbar.querySelector('.mobile-open')?.setAttribute('aria-expanded', String(mobileOpen));
-  rail.inert = mobile.matches && !mobileOpen;
+  rail.inert = horizontal || (mobile.matches && !mobileOpen);
   workspace.inert = mobile.matches && mobileOpen;
   document.body.classList.toggle('nav-open', mobile.matches && mobileOpen);
   scrim.hidden = !(mobile.matches && mobileOpen);
+}
+
+function setAppearance(setting, next) {
+  if (setting === 'theme' && ['light', 'dark'].includes(next)) {
+    theme = next;
+    document.documentElement.dataset.theme = theme;
+    window.dispatchEvent(new window.Event('narra:theme'));
+  } else if (setting === 'layout' && ['vertical', 'horizontal'].includes(next)) {
+    layout = next;
+    renderSidebarState();
+  } else {
+    return;
+  }
+  topbar.querySelectorAll('.appearance-option').forEach(option => {
+    const selected = option.dataset.type === 'theme' ? theme : layout;
+    option.setAttribute('aria-pressed', String(option.dataset.value === selected));
+  });
+  persistPreferences();
 }
 
 function setDrawer(open, restore = true) {
@@ -327,6 +368,7 @@ function togglePopup(name, trigger) {
   popup.hidden = false;
   trigger.setAttribute('aria-expanded', 'true');
   activePopup = name;
+  (popup.querySelector('.active-menu, [aria-pressed="true"]') ?? popup.querySelector('button, a[href]'))?.focus({ preventScroll: true });
 }
 
 function toast(message, error = false) {
@@ -338,13 +380,17 @@ function toast(message, error = false) {
 }
 
 function drawDialog(panel) {
-  dialog.className = panel.size ?? '';
+  dialog.className = [panel.size, panel.presentation].filter(Boolean).join(' ');
   const body = `<header class="dialog-heading"><div><h2 id="dialog-title">${esc(panel.title)}</h2>${panel.subtitle ? `<p>${esc(panel.subtitle)}</p>` : ''}</div>
   ${buttonIcon('close-dialog', 'close', 'Đóng cửa sổ', 'dialog-close')}</header>
   <div class="dialog-body">${panel.body}<p class="form-error" role="alert" hidden></p></div>
-  <footer class="dialog-footer">${panels.length > 1 ? action('Quay lại', 'back-dialog', { symbol: 'chevron_left' }) : ''}${panel.footer ?? ''}</footer>`;
+  ${panel.footer || panels.length > 1 ? `<footer class="dialog-footer">${panels.length > 1 ? action('Quay lại', 'back-dialog', { symbol: 'chevron_left' }) : ''}${panel.footer ?? ''}</footer>` : ''}`;
   dialog.innerHTML = panel.form ? `<form data-form="${panel.form}" data-id="${esc(panel.id ?? '')}">${body}</form>` : body;
   dialog.scrollTop = 0;
+  if (panel.query) {
+    dialog.querySelector('[data-command-input]').value = panel.query;
+    dialog.querySelector('#command-results').innerHTML = commandResults(ctx(), allNavigation(), panel.query);
+  }
 }
 
 function showPanel(panel, nested = false) {
@@ -377,7 +423,7 @@ function goBackDialog() {
   if (panels.length < 2) { closeDialog(); return; }
   panels.pop();
   drawDialog(panels.at(-1));
-  dialog.querySelector('.dialog-close')?.focus();
+  (dialog.querySelector('[data-command-input]') ?? dialog.querySelector('.dialog-close'))?.focus();
 }
 
 dialog.addEventListener('cancel', event => {
@@ -467,6 +513,12 @@ function downloadCSV(name, headers, rows) {
 
 function exportData(type, id) {
   const current = ctx();
+  if (type === 'overview') {
+    downloadCSV(`narra-tong-quan-${range.end}`,
+      ['Ngày', 'Lượt nhấp', 'L0 hợp lệ', 'Kích hoạt Free', 'Đơn Plus', 'Doanh thu (VND)', 'Hoa hồng (VND)'],
+      buckets({ ...current, grain: 'day' }).map(point => [point.span, point.click, point.l0, point.free, point.plus, point.revenue, point.com]));
+    return;
+  }
   if (type === 'orders' || type === 'campaign') {
     const rows = type === 'campaign' ? listOrders(current, { campaign: id }) : listOrders(current);
     downloadCSV(type === 'campaign' ? `narra-${id}` : `narra-don-hang-${range.end}`,
@@ -522,6 +574,7 @@ const simpleActions = {
   'close-dialog': () => closeDialog(),
   'back-dialog': goBackDialog,
   'date-filter': () => showPanel(datePanel(ctx())),
+  'command-search': () => showPanel(commandPanel(ctx(), allNavigation())),
   profile: () => showPanel(profilePanel(ctx())),
 };
 
@@ -531,7 +584,7 @@ document.addEventListener('click', event => {
   const anchor = event.target.closest('a[href^="#/"]');
   if (anchor && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
     closePopup();
-    if (dialog.open) closeDialog(false);
+    if (dialog.open) closeDialog(anchor.hash === window.location.hash);
     if (anchor.hash === window.location.hash) setDrawer(false);
   }
   if (!trigger) return;
@@ -541,6 +594,12 @@ document.addEventListener('click', event => {
     const current = ctx();
     switch (name) {
       case 'popup': togglePopup(value, trigger); break;
+      case 'appearance': setAppearance(type, value); break;
+      case 'table-page':
+        view.tablePage = Number(value);
+        renderResults();
+        document.querySelector('#results .page-counter')?.focus({ preventScroll: true });
+        break;
       case 'tab': viewTab(value); break;
       case 'preset': applyDatePreset(trigger, value); break;
       case 'grain':
@@ -593,6 +652,13 @@ document.addEventListener('click', event => {
 });
 
 document.addEventListener('keydown', event => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !referralCode && !mobileOpen) {
+    if (dialog.open && !dialog.classList.contains('command-dialog')) return;
+    event.preventDefault();
+    if (dialog.open) dialog.querySelector('[data-command-input]')?.focus();
+    else simpleActions['command-search']();
+    return;
+  }
   if (event.key === 'Escape' && !dialog.open) {
     if (activePopup) { closePopup(true); return; }
     if (mobileOpen) setDrawer(false);
@@ -612,12 +678,14 @@ document.addEventListener('keydown', event => {
 main.addEventListener('input', event => {
   if (event.target.dataset.filter !== 'query') return;
   view.query = event.target.value;
+  view.tablePage = 1;
   renderResults();
 });
 
 main.addEventListener('change', event => {
   const { filter } = event.target.dataset;
   if (!filter || filter === 'query') return;
+  view.tablePage = 1;
   if (filter === 'group' || filter === 'partner') {
     filters[filter] = event.target.value;
     if (filter === 'group' && filters.partner && !data.partners.some(p => p.id === filters.partner && (!filters.group || p.group === filters.group))) {
@@ -630,6 +698,29 @@ main.addEventListener('change', event => {
     view[filter] = event.target.value;
     renderResults();
   }
+});
+
+dialog.addEventListener('input', event => {
+  if (!event.target.matches('[data-command-input]')) return;
+  panels.at(-1).query = event.target.value;
+  dialog.querySelector('#command-results').innerHTML = commandResults(ctx(), allNavigation(), event.target.value);
+});
+
+dialog.addEventListener('keydown', event => {
+  const input = dialog.querySelector('[data-command-input]');
+  if (!input || !['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) return;
+  const results = [...dialog.querySelectorAll('.command-result')];
+  const index = results.indexOf(document.activeElement);
+  if (event.key === 'Enter') {
+    if (document.activeElement !== input || !results.length) return;
+    event.preventDefault();
+    results[0].click();
+    return;
+  }
+  if (document.activeElement !== input && index < 0) return;
+  event.preventDefault();
+  const next = event.key === 'ArrowDown' ? results[index + 1] : results[index < 0 ? results.length - 1 : index - 1];
+  (next ?? input).focus();
 });
 
 dialog.addEventListener('change', event => {
@@ -667,6 +758,7 @@ function submitForm(form, fields) {
     case 'date': {
       if (fields.start > fields.end || !Number.isFinite(numDays(fields.start, fields.end))) throw new Error('Ngày kết thúc cần từ ngày bắt đầu trở đi.');
       range = { start: fields.start, end: fields.end, preset: fields.preset };
+      view.tablePage = 1;
       persistPreferences();
       closeDialog();
       renderMain();
@@ -863,6 +955,7 @@ function simulate(type) {
 }
 
 mobile.addEventListener('change', () => {
+  closePopup();
   if (!mobile.matches) setDrawer(false, false);
   renderSidebarState();
 });
@@ -878,6 +971,7 @@ window.addEventListener('storage', event => {
 });
 window.addEventListener('hashchange', syncRoute);
 
+document.documentElement.dataset.theme = theme;
 if (referralCode) startReferral();
 else {
   routeSignature = window.location.hash;

@@ -1,5 +1,41 @@
 import { number } from './model.js';
 
+function sizeCanvas(canvas, context) {
+  const width = canvas.clientWidth;
+  const height = canvas.clientHeight;
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  const pixelWidth = Math.round(width * pixelRatio);
+  const pixelHeight = Math.round(height * pixelRatio);
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+  context.clearRect(0, 0, width, height);
+  return { width, height };
+}
+
+function drawSparkline(canvas, context, points) {
+  if (!context || !canvas.clientWidth) return;
+  const values = points.map(point => point[canvas.dataset.metric]);
+  const { width, height } = sizeCanvas(canvas, context);
+  const spread = Math.max(...values) - Math.min(...values);
+  const low = Math.min(...values);
+  const color = window.getComputedStyle(canvas).getPropertyValue('--kpi-ink').trim();
+  context.beginPath();
+  values.forEach((value, index) => {
+    const x = values.length > 1 ? 1 + (width - 2) * index / (values.length - 1) : width / 2;
+    const y = spread ? height - 3 - (value - low) / spread * (height - 6) : height / 2;
+    if (index) context.lineTo(x, y);
+    else context.moveTo(x, y);
+  });
+  context.lineWidth = 1.45;
+  context.strokeStyle = color;
+  context.globalAlpha = .42;
+  context.stroke();
+  context.globalAlpha = 1;
+}
+
 export function mountChart(points) {
   const canvas = document.querySelector('#trend');
   if (!canvas) return () => {};
@@ -8,30 +44,30 @@ export function mountChart(points) {
   const tooltip = document.querySelector('#chart-tip');
   const readout = document.querySelector('#chart-readout');
   const series = [
-    ['l0', 'L0 hợp lệ', '#7141d6'],
-    ['free', 'Free', '#a681e8'],
-    ['plus', 'Plus', '#739542'],
+    ['l0', 'L0 hợp lệ'],
+    ['free', 'Free'],
+    ['plus', 'Plus'],
   ];
-  const maximum = Math.max(4, ...points.map(point => point.l0));
-  const step = Math.ceil(maximum / 4);
+  const maximum = Math.max(4, ...points.flatMap(point => series.map(([key]) => point[key])));
+  const baseStep = 10 ** Math.floor(Math.log10(maximum / 4));
+  const step = Math.max(1, baseStep * [1, 2, 2.5, 5, 10].find(value => value >= maximum / (4 * baseStep)));
   const upper = step * 4;
+  const sparklines = [...document.querySelectorAll('.kpi-spark')]
+    .map(element => [element, element.getContext('2d')]);
   let hover = -1;
   let xAt = () => 0;
   let scheduled = 0;
 
   function plot() {
-    const width = canvas.clientWidth;
-    const height = canvas.clientHeight;
-    if (!width || !height) return;
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
-    context.scale(ratio, ratio);
+    if (!canvas.clientWidth || !canvas.clientHeight) return;
+    const { width, height } = sizeCanvas(canvas, context);
+    const style = window.getComputedStyle(canvas);
+    const color = property => style.getPropertyValue(property).trim();
     const left = width < 360 ? 33 : 39;
     const top = 13;
     const right = width - 17;
     const bottom = height - 27;
-    const text = '#786b85';
+    const text = color('--soft');
     xAt = index => points.length === 1 ? (left + right) / 2 : left + index * (right - left) / (points.length - 1);
     const yAt = value => bottom - (value / upper) * (bottom - top);
     context.font = "11px 'Be Vietnam Pro', sans-serif";
@@ -40,7 +76,7 @@ export function mountChart(points) {
     context.textBaseline = 'middle';
     for (let tick = 0; tick <= 4; tick++) {
       const y = yAt(step * tick);
-      context.strokeStyle = '#eee8f3';
+      context.strokeStyle = color('--line');
       context.beginPath();
       context.moveTo(left, y);
       context.lineTo(right, y);
@@ -58,7 +94,7 @@ export function mountChart(points) {
       }
     });
 
-    for (const [key, , color] of series) {
+    for (const [key] of series) {
       const coords = points.map((point, index) => [xAt(index), yAt(point[key])]);
       if (!coords.length) continue;
       const line = () => {
@@ -73,8 +109,8 @@ export function mountChart(points) {
       };
       if (key === 'l0' && coords.length > 1) {
         const fill = context.createLinearGradient(0, top, 0, bottom);
-        fill.addColorStop(0, '#9e75ea40');
-        fill.addColorStop(1, '#ab81ed04');
+        fill.addColorStop(0, color('--chart-fill'));
+        fill.addColorStop(1, 'transparent');
         line();
         context.lineTo(coords.at(-1)[0], bottom);
         context.lineTo(coords[0][0], bottom);
@@ -83,7 +119,7 @@ export function mountChart(points) {
         context.fill();
       }
       line();
-      context.strokeStyle = color;
+      context.strokeStyle = color('--chart-' + key);
       context.lineWidth = 2.15;
       context.stroke();
       if (coords.length <= 8 || hover >= 0) {
@@ -91,7 +127,7 @@ export function mountChart(points) {
         for (const [x, y] of visible) {
           context.beginPath();
           context.arc(x, y, 3.45, 0, Math.PI * 2);
-          context.fillStyle = '#fff';
+          context.fillStyle = color('--paper');
           context.fill();
           context.stroke();
         }
@@ -101,7 +137,7 @@ export function mountChart(points) {
       const x = xAt(hover);
       const point = points[hover];
       context.beginPath();
-      context.strokeStyle = '#bea6df';
+      context.strokeStyle = color('--focus');
       context.lineWidth = 1;
       context.setLineDash([3, 4]);
       context.moveTo(x, top);
@@ -153,12 +189,16 @@ export function mountChart(points) {
     select(index, true);
   });
   canvas.addEventListener('blur', () => select(-1));
-  const watcher = new ResizeObserver(schedule);
+  const drawSmallCharts = () => sparklines.forEach(([element, paint]) => drawSparkline(element, paint, points));
+  const redraw = () => { schedule(); drawSmallCharts(); };
+  const watcher = new ResizeObserver(redraw);
   watcher.observe(canvas);
+  window.addEventListener('narra:theme', redraw);
   document.fonts.ready.then(() => { if (canvas.isConnected) schedule(); });
-  schedule();
+  redraw();
   return () => {
     watcher.disconnect();
+    window.removeEventListener('narra:theme', redraw);
     if (scheduled) cancelAnimationFrame(scheduled);
   };
 }

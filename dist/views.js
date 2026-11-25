@@ -33,18 +33,37 @@ const campaignBenefit = c => c.kind === 'multiplier' ? `×${number(c.value)} hoa
   c.kind === 'fixed' ? `+${money(c.value)} mỗi đơn` : `${percent(c.value)} hoa hồng`;
 export { campaignBenefit };
 
-function hero(ctx) {
+function overviewTitle(ctx) {
   const merchant = roleMerchant(ctx);
-  return `<section class="hero">
-    <img class="hero-art" alt="" width="1080" height="720" src="assets/pilot-ribbon.webp" fetchpriority="high">
-    <div class="hero-copy">
-      <span class="hero-label">${merchant ? 'Merchant Center' : 'Affiliate User Center'}</span>
-      <h1>${merchant ? 'Tổng quan chương trình' : `Chào ${esc(firstName(ctx.data.profile.name))}!`}</h1>
-      <p>${merchant ? 'Theo dõi hiệu quả giới thiệu và xử lý hoa hồng từ cùng một nơi.' : 'Xem giới thiệu của bạn mang lại kết quả gì và khi nào hoa hồng được chi trả.'}</p>
-    </div>
-    <div class="hero-action">${merchant
-      ? action('Tạo chiến dịch', 'new-campaign', { symbol: 'add', type: 'lime' })
-      : `<a class="btn btn-lime" href="${route(ctx.role, 'tools')}">${icon('link')} Lấy link giới thiệu</a>`}</div>
+  const report = action('Xuất báo cáo', 'export', { symbol: 'download', attributes: 'data-type="overview"' });
+  const primary = merchant
+    ? action('Tạo chiến dịch', 'new-campaign', { symbol: 'add', type: 'primary' })
+    : `<a class="btn btn-primary" href="${route(ctx.role, 'tools')}">${icon('link')} Lấy link giới thiệu</a>`;
+  return pageTitle(
+    merchant ? 'Tổng quan chương trình' : `Chào ${firstName(ctx.data.profile.name)}!`,
+    merchant ? 'Theo dõi hiệu quả giới thiệu, doanh thu và các giao dịch cần xử lý.'
+      : 'Theo dõi kết quả giới thiệu và hoa hồng trong kỳ bạn chọn.',
+    report + primary,
+  );
+}
+
+function overviewMetrics(current, previous) {
+  return `<section class="kpi-stack" aria-label="Chỉ số chính">
+    ${['click', 'l0', 'free', 'plus'].map(key => {
+      const metric = metrics[key];
+      const change = previous[key] ? 100 * (current[key] - previous[key]) / previous[key] : null;
+      const growth = change === null ? current[key] ? 'Mới trong kỳ' : '0%' : percent(Math.abs(change));
+      return `<button class="report-kpi kpi-${key}" type="button" data-action="metric" data-value="${key}">
+        <span class="report-kpi-icon">${icon(metric.icon)}</span>
+        <span class="report-kpi-label">${metric.name}</span>
+        <strong class="metric-value">${number(current[key])}</strong>
+        <span class="report-kpi-change">
+          <span class="kpi-delta" aria-label="${change > 0 ? 'Tăng ' : change < 0 ? 'Giảm ' : ''}${growth}">${change ? icon(change > 0 ? 'arrow_upward' : 'arrow_downward') : ''}${growth}</span>
+          <span>so với kỳ trước</span>
+        </span>
+        <canvas class="kpi-spark" aria-hidden="true" data-metric="${key}"></canvas>
+      </button>`;
+    }).join('')}
   </section>`;
 }
 
@@ -67,14 +86,25 @@ function funnel(current) {
   </section>`;
 }
 
-function trend(ctx) {
+function trend(ctx, current) {
   const granular = [['day', 'Ngày'], ['week', 'Tuần'], ['month', 'Tháng']];
   return `<section class="card trend-card">${cardTitle('Hiệu quả giới thiệu', 'Ghi nhận theo ngày giới thiệu và ngày thanh toán.',
     `<div class="segmented" aria-label="Độ chi tiết biểu đồ">
       ${granular.map(([value, label]) => `<button type="button" data-action="grain" data-value="${value}" aria-pressed="${ctx.grain === value}" class="${ctx.grain === value ? 'on' : ''}">${label}</button>`).join('')}
     </div>`)}
-    <div class="legend" aria-label="Chú giải biểu đồ"><span><i class="legend-l0"></i>L0 hợp lệ</span><span><i class="legend-free"></i>Free</span><span><i class="legend-plus"></i>Plus</span></div>
+    <div class="report-summary">
+      <a class="report-total" href="${route(ctx.role, 'orders')}">
+        ${statIcon('payments', 'violet')}<span>Doanh thu ghi nhận<strong>${money(current.revenue)}</strong></span>
+      </a>
+      <button type="button" class="report-total" data-action="metric" data-value="com">
+        ${statIcon('account_balance_wallet', 'green')}<span>${roleMerchant(ctx) ? 'Hoa hồng phát sinh' : 'Hoa hồng tạm tính'}<strong>${money(current.com)}</strong></span>
+      </button>
+      <div class="report-total">
+        ${statIcon('monitoring', 'blue')}<span>L0 chuyển sang Plus<strong>${percent(rate(current.plus, current.l0))}</strong></span>
+      </div>
+    </div>
     <div class="chart-area" id="chart-area"><canvas id="trend" tabindex="0" role="img" aria-label="Xu hướng L0, Free và Plus. Dùng phím mũi tên để xem từng mốc."></canvas><div class="chart-tip" id="chart-tip" aria-hidden="true" hidden></div><span class="sr-only" id="chart-readout" role="status"></span></div>
+    <div class="legend" aria-label="Chú giải biểu đồ"><span><i class="legend-l0"></i>L0 hợp lệ</span><span><i class="legend-free"></i>Free</span><span><i class="legend-plus"></i>Plus</span></div>
   </section>`;
 }
 
@@ -147,19 +177,14 @@ export function overview(ctx) {
   const current = stats(data, ids, range);
   const days = numDays(range.start, range.end);
   const previous = stats(data, ids, { start: addDays(range.start, -days), end: addDays(range.start, -1) });
-  const keys = ['click', 'l0', 'free', 'plus', 'com'];
-  return `${hero(ctx)}${filterBar(ctx)}
-  ${metricCards(keys.map(key => ({
-    label: key === 'com' && !roleMerchant(ctx) ? 'Hoa hồng tạm tính' : metrics[key].name,
-    value: key === 'com' ? money(current[key]) : number(current[key]), symbol: metrics[key].icon, tone: metrics[key].tone,
-    raw: current[key], previous: previous[key], detail: 'metric', metric: key,
-  })))}
-  <div class="dashboard-grid chart-grid">${trend(ctx)}${funnel(current)}</div>
+  return `${overviewTitle(ctx)}${filterBar(ctx)}
+  <div class="report-grid">${overviewMetrics(current, previous)}${trend(ctx, current)}</div>
   ${roleMerchant(ctx)
     ? `<div class="dashboard-grid">${ranking(ctx)}${taskPanel(ctx)}</div>`
     : `<div class="dashboard-grid affiliate-grid">${earningsPreview(ctx)}${promotion(ctx, data.campaigns.find(c => c.id === 'GOLDEN26'))}</div>
       <section class="card">${cardTitle('Đơn hàng gần đây', 'Các giao dịch Plus theo ngày thanh toán.', textLink(ctx.role, 'orders', 'Xem đơn hàng'))}
-      ${orderTable(ctx, listOrders(ctx, { status: '', query: '', campaign: '', link: '' }).slice(0, 4))}</section>`}`;
+      ${orderTable(ctx, listOrders(ctx, { status: '', query: '', campaign: '', link: '' }).slice(0, 4))}</section>`}
+  ${funnel(current)}`;
 }
 
 function policyOverview(ctx) {
@@ -313,14 +338,14 @@ export function listOrders(ctx, view = ctx.view) {
     .sort((a, b) => b.paidAt.localeCompare(a.paidAt) || b.id.localeCompare(a.id));
 }
 
-export function orderTable(ctx, rows) {
+export function orderTable(ctx, rows, paginated = false) {
   const merchant = roleMerchant(ctx);
   return table(['Mã đơn', ...(merchant ? ['Đối tác'] : []), 'Ngày thanh toán', 'Gói', 'Giá trị sau hoàn', 'Hoa hồng', 'Trạng thái'],
     rows.map(o => [
       recordLink('order', o.id), ...(merchant ? [personCell(ctx.data.partners.find(p => p.id === o.partner))] : []),
       date(o.paidAt), esc(o.product), money(o.amount - o.refund), `<strong>${money(commission(o))}</strong>`,
       badge(orderStatus(o), o.conflict && merchant ? 'Xung đột nguồn' : undefined),
-    ]), 'Chưa tìm thấy đơn hàng');
+    ]), 'Chưa tìm thấy đơn hàng', undefined, paginated ? ctx.view.tablePage ?? 1 : null);
 }
 
 export function orders(ctx) {
@@ -342,7 +367,7 @@ export function orders(ctx) {
       ${select('status', 'Trạng thái đơn', [['', 'Tất cả trạng thái'], ['pending', 'Chờ xác minh'], ['approved', 'Đã xác nhận'], ['partial', 'Hoàn một phần'], ['refunded', 'Đã hoàn tiền'], ['rejected', 'Từ chối']], view.status)}
       ${select('campaign', 'Chiến dịch', [['', 'Tất cả chiến dịch'], ...campaigns.map(c => [c.id, c.name])], view.campaign)}
       ${select('link', 'Nguồn giới thiệu', [['', 'Tất cả nguồn'], ...data.links.filter(l => ids.includes(l.partner)).map(l => [l.id, l.code])], view.link)}
-      </div>${search('Tìm mã đơn hàng', view.query)}</div><div id="results">${orderTable(ctx, listOrders(ctx))}</div></section>`;
+      </div>${search('Tìm mã đơn hàng', view.query)}</div><div id="results">${orderTable(ctx, listOrders(ctx), true)}</div></section>`;
 }
 
 export function listEarnings(ctx) {
@@ -373,7 +398,7 @@ export function payoutList(ctx) {
       date(o.paidAt), date(holdEnd(o)), `<strong>${money(commission(o))}</strong>`,
       batch ? recordLink('batch', batch.id) : 'Chưa vào kỳ', badge(earningStatus(data, o)),
     ];
-  }), 'Chưa có khoản hoa hồng phù hợp');
+  }), 'Chưa có khoản hoa hồng phù hợp', undefined, view.tablePage ?? 1);
 }
 
 export function payouts(ctx) {
