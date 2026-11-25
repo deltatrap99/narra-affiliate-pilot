@@ -1,5 +1,7 @@
 /node_modules/
 /dist/server/
+/.vercel/
+/.vercel-build/
 .env
 .env.*
 .dev.vars

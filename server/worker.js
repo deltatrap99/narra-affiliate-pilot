@@ -4,6 +4,8 @@ import {
   randomToken, hashPassword, equalDigest, requireIdentity, readSession, requireSession, issueSession, endSession, clearCookie, throttle,
 } from './security.js';
 import { applicationFields, codeField, emailField, passwordField, editableFields } from './fields.js';
+import { vercelConnection } from './hosting.js';
+import { connectVercel } from './vercel-link.js';
 
 const groups = new Set(['DSGD', 'DSSV']);
 const selectAccount = (env, id) => env.DB.prepare('SELECT * FROM portal_accounts WHERE id = ?').bind(id).first();
@@ -224,23 +226,37 @@ function asset(path, request, isPage = false) {
 }
 const redirect = location => new Response(null, { status: 303, headers: { location, 'cache-control': 'no-store' } });
 
+async function servePortal(request, env, url = new URL(request.url)) {
+  const { pathname } = url;
+  if (pathname.startsWith('/api/')) return api(env, request, pathname);
+  if (!['GET', 'HEAD'].includes(request.method)) return new Response('Phương thức chưa được hỗ trợ.', { status: 405 });
+  if ((pathname === '/' || pathname === '/portal') && url.searchParams.has('ref')) return redirect('/r' + url.search);
+  if (pathname === '/') return asset('/landing.html', request, true);
+  if (pathname === '/portal') return (await readSession(env, request)) ? asset('/index.html', request, true) : redirect('/');
+  if (pathname === '/r' && url.searchParams.has('ref')) return asset('/index.html', request, true);
+  if (!pathname.endsWith('.html')) return asset(pathname, request);
+  return redirect('/');
+}
+
+function requestError(error) {
+  if (error instanceof PortalError) return json({ error: error.message }, error.status);
+  console.error('Narra portal request failed', error.name);
+  return json({ error: 'Chưa thể xử lý yêu cầu. Vui lòng thử lại.' }, 500);
+}
+
+async function portalResponse(request, env, url) {
+  try { return await servePortal(request, env, url); }
+  catch (error) { return requestError(error); }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const { pathname } = url;
     try {
-      if (pathname.startsWith('/api/')) return await api(env, request, pathname);
-      if (!['GET', 'HEAD'].includes(request.method)) return new Response('Phương thức chưa được hỗ trợ.', { status: 405 });
-      if ((pathname === '/' || pathname === '/portal') && url.searchParams.has('ref')) return redirect('/r' + url.search);
-      if (pathname === '/') return asset('/landing.html', request, true);
-      if (pathname === '/portal') return (await readSession(env, request)) ? asset('/index.html', request, true) : redirect('/');
-      if (pathname === '/r' && url.searchParams.has('ref')) return asset('/index.html', request, true);
-      if (!pathname.endsWith('.html')) return asset(pathname, request);
-      return redirect('/');
+      if (url.pathname.startsWith(vercelConnection + '/')) return await connectVercel(request, env, url, portalResponse);
+      return await portalResponse(request, env, url);
     } catch (error) {
-      if (error instanceof PortalError) return json({ error: error.message }, error.status);
-      console.error('Narra portal request failed', error.name);
-      return json({ error: 'Chưa thể xử lý yêu cầu. Vui lòng thử lại.' }, 500);
+      return requestError(error);
     }
   },
 };
