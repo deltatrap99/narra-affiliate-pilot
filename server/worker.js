@@ -52,28 +52,6 @@ async function apply(env, request, input) {
   return json({ code: result.code }, 201);
 }
 
-async function provisionAccount(env, request) {
-  // Sites service requests carry no visitor identity. The deployment grant authorizes a single partner code.
-  const [code, expiry, expected] = (env.PORTAL_PROVISION_GRANT ?? '').split(':');
-  if (request.headers.has('oai-authenticated-user-id') || !/^[A-Z0-9][A-Z0-9_-]{1,31}$/.test(code) ||
-    !/^\d{10}$/.test(expiry ?? '') || Number(expiry) <= now() || !/^[a-f\d]{64}$/.test(expected ?? '')) {
-    return json({ error: 'Không tìm thấy chức năng này.' }, 404);
-  }
-  const token = request.headers.get('x-narra-provision-key') ?? '';
-  if (!/^[a-f\d]{64}$/.test(token) || !equalDigest(await digest(token), expected)) throw forbidden();
-  const password = passwordField(await inputJson(request), false);
-  const salt = randomToken(16);
-  const profile = { name: 'Đối tác ' + code, email: '', phone: '', group: 'DSGD' };
-  const [payload, hashed] = await Promise.all([seal(env, profile), hashPassword(env, password, salt)]);
-  const created = now();
-  const account = await env.DB.prepare(`INSERT INTO portal_accounts
-    (id, code, email_key, payload, salt, password_hash, status, created_at, reviewed_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, ?) ON CONFLICT(code) DO NOTHING RETURNING id, code, status`)
-    .bind('PT-' + crypto.randomUUID(), code, randomToken(), payload, salt, hashed, created, created).first();
-  if (!account) throw new PortalError(409, 'Mã đối tác đã được sử dụng.');
-  return json({ account }, 201);
-}
-
 async function login(env, request, input) {
   await throttle(env, request, 'login', 12);
   const code = codeField(input);
@@ -198,7 +176,6 @@ async function partnerProfile(env, id, session, input) {
 }
 
 async function api(env, request, path) {
-  if (path === '/api/admin/provision' && request.method === 'POST') return provisionAccount(env, request);
   requireIdentity(request);
   const method = request.method;
   if (path === '/api/session' && method === 'GET') return accountResponse(env, request);
