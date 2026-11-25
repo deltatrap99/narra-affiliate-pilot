@@ -70,7 +70,8 @@ export function mountChart(points) {
     const text = color('--soft');
     xAt = index => points.length === 1 ? (left + right) / 2 : left + index * (right - left) / (points.length - 1);
     const yAt = value => bottom - (value / upper) * (bottom - top);
-    context.font = "11px 'Be Vietnam Pro', sans-serif";
+    const fontFamily = color('--font-ui') || 'system-ui, sans-serif';
+    context.font = `500 11px ${fontFamily}`;
     context.lineWidth = 1;
     context.textAlign = 'right';
     context.textBaseline = 'middle';

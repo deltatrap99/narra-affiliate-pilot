@@ -1,3 +1,6 @@
+import { campaignProgressFor } from './campaign-progress.js';
+import { mechanismSource, partnerPlans, planLabel, planEarnings } from './partner-mechanism.js';
+import { partnerCode } from './partner-profile.js';
 import {
   TODAY, GROUPS, PARTNER_ID, date, number, money, percent, addDays, numDays, includesDate, stats,
   earnings, policyAt, campaignStatus, inAudience, commission, orderStatus, earningStatus, holdEnd, batchFor,
@@ -49,7 +52,7 @@ function overviewTitle(ctx) {
 
 function narriWelcome(ctx) {
   const merchant = roleMerchant(ctx);
-  const greeting = merchant ? 'Chào bạn, Narri đây!' : `Chào ${firstName(ctx.data.profile.name)}, Narri đây!`;
+  const greeting = merchant ? 'Chào bạn, Narri đây!' : `Chào ${firstName(ctx.partners[0]?.name)}, Narri đây!`;
   const encouragement = merchant
     ? 'Nếu hôm nay có nhiều việc, cứ bắt đầu với những đơn cần xác minh rồi quay lại xem chương trình đang tiến triển thế nào nhé.'
     : 'Mỗi lời giới thiệu đều có thể giúp thêm một người tìm được cách luyện nói phù hợp. Hôm nay, bạn thử bắt đầu với một người bạn đang muốn luyện tiếng Anh nhé.';
@@ -194,9 +197,36 @@ export function overview(ctx) {
   ${roleMerchant(ctx)
     ? `<div class="dashboard-grid">${ranking(ctx)}${taskPanel(ctx)}</div>`
     : `<div class="dashboard-grid affiliate-grid">${earningsPreview(ctx)}${promotion(ctx, data.campaigns.find(c => c.id === 'GOLDEN26'))}</div>
-      <section class="card">${cardTitle('Đơn hàng gần đây', 'Các giao dịch Plus theo ngày thanh toán.', textLink(ctx.role, 'orders', 'Xem đơn hàng'))}
+      <section class="card">${cardTitle('Đơn hàng gần đây', 'Các giao dịch theo ngày thanh toán.', textLink(ctx.role, 'orders', 'Xem đơn hàng'))}
       ${orderTable(ctx, listOrders(ctx, { status: '', query: '', campaign: '', link: '' }).slice(0, 4))}</section>`}
   ${funnel(current)}`;
+}
+
+export function mechanismOverview(ctx) {
+  const scheme = ctx.data.mechanism;
+  const amountRows = partnerPlans.map(plan => {
+    const example = planEarnings(scheme, plan);
+    return [esc(planLabel(plan)), money(example.amount), money(example.monthly), money(example.base), money(example.growth), money(example.renewal)];
+  });
+  return `<section class="card mechanism-card">${cardTitle('Cơ chế đối tác', 'Hoa hồng cho các gói Narra Plus và Family theo số chủ gói mua mới hợp lệ trong tháng.',
+      roleMerchant(ctx) ? action('Chỉnh cơ chế', 'edit-mechanism', { symbol: 'edit', type: 'primary' }) : '')}
+    <div class="mechanism-rates">
+      <div><span>Hoa hồng cơ bản</span><strong>${percent(scheme.base)}</strong></div>
+      <div><span>Tăng trưởng</span><strong>${percent(scheme.growth)}</strong></div>
+      <div><span>Ngưỡng chủ gói mới</span><strong>${number(scheme.threshold)} <small>/ tháng</small></strong></div>
+      <div><span>Gia hạn</span><strong>${percent(scheme.renewal)}</strong></div>
+    </div>
+    <div class="mechanism-rules">
+      <p>${scheme.threshold ? `${number(scheme.threshold)} chủ gói mới hợp lệ đầu tiên trong tháng hưởng ${percent(scheme.base)}. Từ chủ gói thứ ${number(scheme.threshold + 1)}, gói 3, 6 và 12 tháng hưởng ${percent(scheme.growth)}, còn gói 1 tháng hưởng ${percent(scheme.base)}.` :
+        `Các gói 3, 6 và 12 tháng hưởng ${percent(scheme.growth)} từ chủ gói mới đầu tiên trong tháng, còn gói 1 tháng hưởng ${percent(scheme.base)}.`}
+        Ngưỡng được tính lại vào đầu mỗi tháng.</p>
+      <p>Mỗi chủ gói mới Plus hoặc Family được tính một lần. Đơn gia hạn, thành viên Family và đơn hoàn tiền được tách khỏi ngưỡng mua mới. Gia hạn khi đối tác tiếp tục hỗ trợ khách hưởng ${percent(scheme.renewal)}.</p>
+      <p><strong>Đề xuất quyền bán mới.</strong> Lần đầu mua gói trả phí của Narra cần có quyền khai thác hợp lệ. Khách cũ đã kết thúc khóa hoặc gói cuối tại GE ít nhất ${number(scheme.returnDays)} ngày và chưa đăng ký mới hoặc gia hạn có thể được xét bán mới theo quy định GE.</p>
+    </div>
+    ${cardTitle('Thu nhập theo gói và kỳ', 'Mức hoa hồng tính trên số tiền thu một lần của từng gói.')}
+    ${table(['Gói & kỳ', 'Thu một lần', 'Quy đổi/tháng', 'HH cơ bản', 'HH tăng trưởng', 'HH gia hạn'], amountRows)}
+    <div class="mechanism-source"><a class="text-link" href="${mechanismSource}" target="_blank" rel="noopener">Xem bảng cơ chế gốc</a></div>
+  </section>`;
 }
 
 function policyOverview(ctx) {
@@ -207,35 +237,30 @@ function policyOverview(ctx) {
   const details = [
     ['Ngày hiệu lực', date(current.effective)],
     ['Nhóm áp dụng', merchant ? 'Đại sứ giáo dục và Đại sứ sinh viên' : groupName(person.group)],
-    ['Hoa hồng nền', merchant ? `ĐSGD ${percent(current.DSGD)} · ĐSSV ${percent(current.DSSV)}` : percent(current[person.group])],
-    ['Sản phẩm áp dụng', 'Đơn Narra Plus mua lần đầu đủ điều kiện'],
     ['Cơ sở tính', 'Giá trị thanh toán đủ điều kiện sau hoàn tiền'],
     ['Cửa sổ ghi nhận', `${number(current.attribution)} ngày tính từ lượt giới thiệu`],
     ['Thời gian giữ', `${number(current.hold)} ngày sau khi duyệt đơn`],
     ['Ngưỡng và lịch chi trả', `${money(current.threshold)} · ${current.cadence}`],
     ['Hoàn tiền', 'Hoa hồng được điều chỉnh theo khoản hoàn, kể cả sau khi đã chi.'],
-    ['Gia hạn', 'Hoa hồng chỉ áp dụng cho lần mua đầu tiên đủ điều kiện.'],
   ];
-  return `<section class="card policy-card">${cardTitle(`Chính sách ${current.id}`, 'Áp dụng theo phiên bản có hiệu lực tại ngày thanh toán.',
+  return `<section class="card policy-card">${cardTitle('Điều kiện ghi nhận và chi trả', `Phiên bản ${current.id} áp dụng theo ngày thanh toán.`,
     badge(current.enabled ? 'active' : 'paused'))}
     <dl class="details-grid">${details.map(([key, value]) => `<div><dt>${esc(key)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>
     <div class="card-footer">
-      ${note('Các mức tỷ lệ và ngưỡng ở đây dùng để tham khảo khi thiết lập chính sách.')}
       ${merchant ? action('Tạo phiên bản', 'new-policy', { symbol: 'edit', type: 'primary' }) :
         ctx.data.profile.confirmedPolicy === current.id ? badge('approved', 'Bạn đã xác nhận') : action('Xác nhận đã đọc', 'confirm-policy', { symbol: 'check', type: 'primary' })}
     </div>
   </section>
-  <section class="card">${cardTitle('Lịch sử chính sách', 'Tra cứu phiên bản và mức hoa hồng đã áp dụng theo thời gian.')}
-  ${table(['Phiên bản', 'Hiệu lực từ', ...(merchant ? ['ĐSGD', 'ĐSSV'] : ['Mức hoa hồng']), 'Yêu cầu giữ', 'Trạng thái'],
+  <section class="card">${cardTitle('Lịch sử điều kiện chi trả', 'Tra cứu các phiên bản đã áp dụng theo thời gian.')}
+  ${table(['Phiên bản', 'Hiệu lực từ', 'Yêu cầu giữ', 'Trạng thái'],
     [...data.policies].reverse().map(p => [
-      recordLink('policy', p.id), date(p.effective),
-      ...(merchant ? [percent(p.DSGD), percent(p.DSSV)] : [percent(p[person.group])]), `${p.hold} ngày`,
+      recordLink('policy', p.id), date(p.effective), `${p.hold} ngày`,
       p.id === current.id ? badge('active', 'Đang áp dụng') : badge(p.effective > TODAY ? 'scheduled' : 'ended'),
     ]))}</section>`;
 }
 
 export function policyPage(ctx) {
-  return `${pageTitle('Chính sách & quyền lợi', 'Xem quyền lợi theo nhóm Đại sứ, cùng điều kiện ghi nhận và chi trả hoa hồng.')}${policyOverview(ctx)}`;
+  return `${pageTitle('Cơ chế đối tác', 'Tra cứu quyền lợi, mức hoa hồng và điều kiện chi trả.')}${mechanismOverview(ctx)}${policyOverview(ctx)}`;
 }
 
 export function campaignList(ctx) {
@@ -247,11 +272,12 @@ export function campaignList(ctx) {
   const rows = items.map(c => {
     const allowed = c.members[person.id];
     const totals = stats(data, ids, range, { campaign: c.id });
+    const progress = merchant ? null : campaignProgressFor(data, c, person.id);
     return [
       `<div class="item-cell">${statIcon(c.kind === 'multiplier' ? 'workspace_premium' : 'campaign', c.kind === 'multiplier' ? 'gold' : 'violet')}<span>${recordLink('campaign', c.id, c.name)}<small>${esc(c.id)}</small></span></div>`,
       dateSpan(c.start, c.end), `<strong>${esc(campaignBenefit(c))}</strong>`,
       merchant ? esc(groupName(c.group)) : allowed ? badge(allowed, allowed === 'pending' ? 'Chờ duyệt' : 'Đã tham gia') : 'Chưa tham gia',
-      merchant ? number(totals.plus) : `${number(totals.plus)} / ${number(c.target)} đơn`,
+      merchant ? number(totals.plus) : `${number(progress.counts.orders)} / ${number(c.target)} đơn · ${progress.achieved}/${progress.totalGoals} mốc`,
       badge(campaignStatus(c)), action('Chi tiết', 'detail', { type: 'small', attributes: `data-type="campaign" data-id="${esc(c.id)}"` }),
     ];
   });
@@ -263,7 +289,7 @@ export function campaigns(ctx) {
   const { data, view } = ctx;
   if (merchant && view.tab === 'program') {
     return `${pageTitle('Chiến dịch', 'Cấu hình chương trình dài hạn và quản lý các chiến dịch theo từng đợt.')}
-      ${tabs([['list', 'Chiến dịch ngắn hạn'], ['program', 'Chương trình Affiliate']], 'program')}${policyOverview(ctx)}`;
+      ${tabs([['list', 'Chiến dịch ngắn hạn'], ['program', 'Chương trình Affiliate']], 'program')}${mechanismOverview(ctx)}${policyOverview(ctx)}`;
   }
   const rows = merchant ? data.campaigns : data.campaigns.filter(c => c.state !== 'draft' && inAudience(c, data.partners.find(p => p.id === PARTNER_ID)));
   const highlighted = rows.find(c => c.id === 'GOLDEN26');
@@ -277,7 +303,7 @@ export function campaigns(ctx) {
 }
 
 export function partnerList(ctx) {
-  const list = ctx.partners.filter(p => matches(ctx.view.query, p.id, p.name, groupName(p.group)) && (!ctx.view.status || p.status === ctx.view.status));
+  const list = ctx.partners.filter(p => matches(ctx.view.query, partnerCode(p), p.name, groupName(p.group)) && (!ctx.view.status || p.status === ctx.view.status));
   return table(['Đối tác', 'Ngày gửi hồ sơ', 'L0 hợp lệ', 'Đơn Plus', 'Hoa hồng', 'Trạng thái'], list.map(p => {
     const values = stats(ctx.data, [p.id], ctx.range);
     return [personCell(p), date(p.joined), number(values.l0), number(values.plus), `<strong>${money(values.com)}</strong>`,
@@ -287,7 +313,11 @@ export function partnerList(ctx) {
 
 export function partners(ctx) {
   const list = ctx.partners;
-  return `${pageTitle('Đối tác', 'Duyệt hồ sơ Đại sứ, quản lý nhóm và theo dõi hiệu quả giới thiệu theo từng đối tác.')}
+  const onRules = ctx.view.tab === 'mechanism';
+  const heading = pageTitle('Đối tác', 'Duyệt hồ sơ, theo dõi hiệu quả giới thiệu và quản lý cơ chế hoa hồng.');
+  const nav = tabs([['list', 'Hồ sơ đối tác'], ['mechanism', 'Cơ chế đối tác']], onRules ? 'mechanism' : 'list');
+  if (onRules) return heading + nav + mechanismOverview(ctx);
+  return `${heading}${nav}
   ${filterBar(ctx)}
   ${metricCards([
     { label: 'Tổng đối tác', value: number(list.length), symbol: 'group' },

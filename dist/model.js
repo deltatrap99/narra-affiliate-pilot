@@ -1,3 +1,5 @@
+import { defaultMechanism, partnerOrderRate } from './partner-mechanism.js';
+
 export const TODAY = '2026-11-25';
 const DAY = 86_400_000;
 const localStore = 'narra-affiliate-pilot-v1';
@@ -109,13 +111,25 @@ function seed() {
   const batches = [{
     id: 'PO-2611-01', name: 'Kỳ 01/11 - 10/11', created: '2026-11-10', paidAt: '2026-11-12', ref: 'NARRA-1112', entries: paidEntries,
   }];
-  return { partners, campaigns, policies, links, activity, orders, batches, adjustments: [], tickets: [], profile: { name: 'Minh Anh', email: '', bank: '', bankLast4: '', verification: '' }, audit: [] };
+  return { partners, campaigns, policies, links, activity, orders, batches, adjustments: [], tickets: [], profile: {}, mechanism: defaultMechanism(), audit: [] };
 }
 
 export function readState() {
   try {
     const saved = JSON.parse(localStorage.getItem(localStore));
-    if (saved?.partners && saved.policies) return saved;
+    if (saved?.partners && saved.policies) {
+      const legacy = saved.profile ?? {};
+      if ('name' in legacy) {
+        const person = saved.partners.find(partner => partner.id === PARTNER_ID);
+        if (person) {
+          const { name, email, bank, bankLast4, verification } = legacy;
+          Object.assign(person, { name: name || person.name, email, bank, bankLast4, verification: Boolean(verification) });
+        }
+      }
+      saved.profile = { confirmedPolicy: legacy.confirmedPolicy };
+      saved.mechanism ??= defaultMechanism();
+      return saved;
+    }
   } catch {}
   return seed();
 }
@@ -183,7 +197,7 @@ export function stats(data, partnerIds, range, opts = {}) {
   const events = data.activity.filter(row => selected(row) && includesDate(row.at, range));
   const orders = data.orders.filter(o => selected(o) && includesDate(o.paidAt, range) && o.status !== 'rejected' &&
     !(o.refund >= o.amount && (!o.refundedAt || o.refundedAt <= range.end)));
-  const sums = { click: 0, unique: 0, l0: 0, free: 0, plus: orders.length, revenue: 0, com: 0 };
+  const sums = { click: 0, unique: 0, l0: 0, free: 0, plus: orders.filter(order => order.product === 'Narra Plus' && order.purchase !== 'renewal').length, revenue: 0, com: 0 };
   for (const row of events) {
     for (const metric of ['click', 'unique', 'l0', 'free']) sums[metric] += row[metric];
   }
@@ -223,10 +237,26 @@ export function newLink(data, fields) {
   return link;
 }
 
+export function quotePartnerOrder(data, order, campaign) {
+  const baseRate = partnerOrderRate(data.orders, order);
+  if (!campaign || order.purchase === 'renewal') return { baseRate, rate: baseRate, bonus: 0, campaign: '' };
+  const rate = campaign.kind === 'rate' ? Math.max(baseRate, campaign.value) :
+    baseRate * (campaign.kind === 'multiplier' ? campaign.value : 1);
+  const bonus = campaign.kind === 'fixed' ? campaign.value : 0;
+  const claimed = data.orders.filter(o => o.id !== order.id && o.campaign === campaign.id && o.status !== 'rejected' && o.refund < o.amount)
+    .reduce((total, o) => total + Math.max(0, commission(o) - Math.round((o.amount - o.refund) * o.baseRate / 100)), 0);
+  const net = order.amount - order.refund;
+  const incremental = Math.round(net * rate / 100) + bonus - Math.round(net * baseRate / 100);
+  return claimed + incremental <= campaign.budget
+    ? { baseRate, rate, bonus, campaign: campaign.id }
+    : { baseRate, rate: baseRate, bonus: 0, campaign: '' };
+}
+
 export function decideOrder(data, order, decision, reason = '', attributedLink = '') {
   if (order.status !== 'pending' || order.refund >= order.amount) throw new Error('Giao dịch đã được xử lý.');
   if (decision === 'approved') {
     if (order.conflict && !attributedLink) throw new Error('Chọn nguồn giới thiệu trước khi xác nhận.');
+    let chosenCampaign = data.campaigns.find(c => c.id === order.campaign);
     if (attributedLink) {
       const link = data.links.find(l => l.id === attributedLink);
       const partner = data.partners.find(p => p.id === link?.partner);
@@ -237,13 +267,17 @@ export function decideOrder(data, order, decision, reason = '', attributedLink =
         c.members[partner.id] === 'joined' && c.eligibleProduct === order.product);
       order.link = link.id;
       order.partner = partner.id;
-      order.campaign = campaign?.id ?? '';
-      order.baseRate = policy[partner.group];
-      order.rate = campaign?.kind === 'rate' ? campaign.value : order.baseRate * (campaign?.kind === 'multiplier' ? campaign.value : 1);
-      order.bonus = campaign?.kind === 'fixed' ? campaign.value : 0;
+      chosenCampaign = campaign;
+      if (!order.terms) {
+        order.campaign = campaign?.id ?? '';
+        order.baseRate = policy[partner.group];
+        order.rate = campaign?.kind === 'rate' ? campaign.value : order.baseRate * (campaign?.kind === 'multiplier' ? campaign.value : 1);
+        order.bonus = campaign?.kind === 'fixed' ? campaign.value : 0;
+      }
       order.version = policy.id;
       order.conflict = false;
     }
+    if (order.terms) Object.assign(order, quotePartnerOrder(data, order, chosenCampaign));
     order.approved = TODAY;
   }
   order.status = decision;

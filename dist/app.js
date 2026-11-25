@@ -1,16 +1,19 @@
+import { readCampaignGoals } from './campaign-progress.js';
+import { partnerPlans, planLabel, commissionTerms, readMechanismFields } from './partner-mechanism.js';
+import { profileFields, prepareAvatar } from './partner-profile.js';
 import {
   TODAY, GROUPS, PARTNER_ID, date, number, money, percent, initialRange, includesDate, numDays,
   readState, saveState, selectPartners, stats, policyAt, campaignStatus, inAudience, commission,
-  orderStatus, eligiblePayoutEntries, decideOrder, refundOrder, newLink, record,
+  orderStatus, eligiblePayoutEntries, decideOrder, refundOrder, newLink, record, quotePartnerOrder,
 } from './model.js';
-import { icon, brandMark, esc, avatar, groupName, route, action, merchantNav, affiliateNav, statusText, sum } from './ui.js';
+import { icon, brandMark, esc, avatar, groupName, route, action, optionList, merchantNav, affiliateNav, statusText, sum } from './ui.js';
 import {
   overview, campaigns, partners, toolsPage, orders, payouts, policyPage, systemPage, supportPage,
   campaignList, partnerList, linkList, orderTable, listOrders, payoutList, buckets,
 } from './views.js';
 import {
   datePanel, campaignForm, partnerForm, orderForm, batchForm, policyForm, linkForm, metricPanel,
-  detailPanel, profilePanel, supportForm, choosePreset,
+  detailPanel, profilePanel, mechanismForm, campaignGoalsForm, supportForm, choosePreset,
 } from './panels.js';
 import { mountChart } from './chart.js';
 import { appearanceMenu, commandPanel, commandResults } from './workspace-ui.js';
@@ -150,7 +153,7 @@ function notificationItems() {
 
 function renderTopbar() {
   const merchant = role === 'merchant';
-  const person = merchant ? { name: 'Narra Admin', tone: 'violet' } : { name: data.profile.name, tone: 'violet' };
+  const person = merchant ? { name: 'Narra Admin', tone: 'violet' } : findData('partners', PARTNER_ID);
   const items = notificationItems();
   const name = titleForPage();
   const shortcut = /Mac|iPhone|iPad/.test(window.navigator.platform) ? '⌘ K' : 'Ctrl K';
@@ -220,6 +223,7 @@ function parseRoute() {
   if (sub === 'pending' && ['orders', 'partners'].includes(page)) view.status = 'pending';
   if (['batches', 'adjustments'].includes(sub) && page === 'payouts') view.tab = sub;
   if (sub === 'program' && page === 'campaigns' && role === 'merchant') view.tab = sub;
+  if (sub === 'mechanism' && page === 'partners') view.tab = sub;
 }
 
 function syncRoute() {
@@ -445,12 +449,12 @@ function findData(list, id) {
 
 function update(message, summary, next = null) {
   if (summary) record(data, summary);
-  saveState(data);
+  const persisted = saveState(data);
   closeDialog(false);
   render();
   if (next) showPanel(next());
   else main.focus({ preventScroll: true });
-  toast(message);
+  toast(persisted ? message : 'Trình duyệt chưa lưu được thay đổi.', !persisted);
 }
 
 function handleCampaign(trigger) {
@@ -610,8 +614,11 @@ document.addEventListener('click', event => {
       case 'metric': showPanel(metricPanel(current, value)); break;
       case 'detail': showPanel(detailPanel(current, type, id), true); break;
       case 'new-campaign': merchantOnly(); showPanel(campaignForm(current)); break;
+      case 'edit-campaign-goals': merchantOnly(); showPanel(campaignGoalsForm(current, findData('campaigns', id)), true); break;
       case 'edit-campaign': merchantOnly(); showPanel(campaignForm(current, findData('campaigns', id)), true); break;
       case 'new-policy': merchantOnly(); showPanel(policyForm(current)); break;
+      case 'edit-mechanism': merchantOnly(); showPanel(mechanismForm(current)); break;
+      case 'edit-partner-profile': merchantOnly(); showPanel(profilePanel(current, id), true); break;
       case 'confirm-policy':
         data.profile.confirmedPolicy = policyAt(data).id;
         update('Đã lưu xác nhận đọc chính sách.');
@@ -744,6 +751,7 @@ function saveCampaign(fields, id) {
     id: code, name: fields.name, start: fields.start, end: fields.end, group: fields.group, state: 'draft',
     mode: fields.mode, kind: fields.kind, value, target: Number(fields.target), budget: Number(fields.budget),
     owner: fields.owner, eligibleProduct: fields.eligibleProduct, description: fields.description, members: {},
+    ...(existing?.goals ? { goals: { ...existing.goals, orders: Number(fields.target) } } : {}),
   };
   if (existing) Object.assign(existing, details);
   else data.campaigns.unshift(details);
@@ -772,8 +780,9 @@ function submitForm(form, fields) {
       if (fields.effective < TODAY) throw new Error('Chọn ngày hiệu lực từ hôm nay trở đi.');
       if (data.policies.some(p => p.effective === fields.effective)) throw new Error('Ngày này đã có phiên bản chính sách.');
       const id = 'v1.' + data.policies.length;
+      const inherited = policyAt(data, fields.effective);
       data.policies.push({
-        id, effective: fields.effective, DSGD: +fields.DSGD, DSSV: +fields.DSSV, hold: +fields.hold,
+        id, effective: fields.effective, DSGD: inherited.DSGD, DSSV: inherited.DSSV, hold: +fields.hold,
         attribution: +fields.attribution, threshold: +fields.threshold, cadence: fields.cadence,
         landing: fields.landing, enabled: fields.enabled === 'on',
       });
@@ -846,15 +855,19 @@ function submitForm(form, fields) {
       update('Đã ghi nhận kỳ chi trả.', `Ghi nhận chi trả kỳ ${batch.id}.`, () => detailPanel(ctx(), 'batch', id));
       break;
     }
-    case 'profile': {
-      if (role !== 'affiliate' || !fields.name) throw new Error('Nhập tên hiển thị của bạn.');
-      if (Boolean(fields.bank) !== Boolean(fields.bankLast4)) throw new Error('Nhập cả tên ngân hàng và 4 số cuối, hoặc xóa cả hai.');
-      const changed = fields.bank !== data.profile.bank || fields.bankLast4 !== data.profile.bankLast4;
-      Object.assign(data.profile, fields);
-      if (changed) data.profile.verification = fields.bank ? 'Thông tin nhận tiền đang chờ xác minh.' : '';
-      update('Đã lưu thông tin hồ sơ.');
+    case 'campaign-goals': {
+      merchantOnly();
+      const campaign = findData('campaigns', id);
+      campaign.goals = readCampaignGoals(fields);
+      campaign.target = campaign.goals.orders;
+      update('Đã lưu mốc thi đua.', `Cập nhật mốc thi đua của ${campaign.name}.`, () => detailPanel(ctx(), 'campaign', id));
       break;
     }
+    case 'mechanism':
+      merchantOnly();
+      data.mechanism = readMechanismFields(fields, data.mechanism);
+      update('Đã lưu cơ chế đối tác.', `Cập nhật cơ chế đối tác, phiên bản ${data.mechanism.revision}.`);
+      break;
     case 'ticket': {
       if (!fields.body || fields.body.length < 8) throw new Error('Mô tả thêm thông tin để đội vận hành có thể đối chiếu.');
       const ticket = { id: `HT-${String(data.tickets.length + 1).padStart(3, '0')}`, at: TODAY, body: fields.body, partner: role === 'affiliate' ? PARTNER_ID : '', order: id };
@@ -866,15 +879,42 @@ function submitForm(form, fields) {
   }
 }
 
+async function savePartnerProfile(form, fields, photo) {
+  const id = form.dataset.id;
+  const admin = role === 'merchant';
+  if (!admin && id !== PARTNER_ID) throw new Error('Bạn chỉ có thể sửa hồ sơ của mình.');
+  const avatar = photo?.size ? await prepareAvatar(photo) : null;
+  if (!dialog.open || !form.isConnected || admin !== (role === 'merchant')) return;
+  const partner = findData('partners', id);
+  Object.assign(partner, profileFields(data.partners, partner, fields, admin));
+  if (avatar !== null) partner.avatar = avatar;
+  else if (fields.removeAvatar === 'on') partner.avatar = '';
+  update('Đã lưu thông tin hồ sơ.', admin ? `Cập nhật hồ sơ ${partner.name}.` : '',
+    admin ? () => detailPanel(ctx(), 'partner', id) : () => profilePanel(ctx()));
+}
+
 dialog.addEventListener('submit', event => {
   const form = event.target.closest('[data-form]');
   if (!form) return;
   event.preventDefault();
-  const fields = Object.fromEntries([...new FormData(form)].map(([key, value]) => [key, String(value).trim()]));
+  if (form.dataset.saving) return;
+  const formData = new FormData(form);
+  const fields = Object.fromEntries([...formData].filter(([, value]) => typeof value === 'string').map(([key, value]) => [key, value.trim()]));
   const errorMessage = form.querySelector('.form-error');
   errorMessage.hidden = true;
+  const reportError = error => { errorMessage.textContent = error.message; errorMessage.hidden = false; };
+  if (form.dataset.form === 'profile') {
+    form.dataset.saving = 'true';
+    const submitButton = form.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    void savePartnerProfile(form, fields, formData.get('avatar')).catch(reportError).finally(() => {
+      delete form.dataset.saving;
+      submitButton.disabled = false;
+    });
+    return;
+  }
   try { submitForm(form, fields); }
-  catch (error) { errorMessage.textContent = error.message; errorMessage.hidden = false; }
+  catch (error) { reportError(error); }
 });
 
 const referralCode = new URLSearchParams(location.search).get('ref')?.toUpperCase();
@@ -890,7 +930,7 @@ function startReferral() {
   if (link) {
     try { clickEventKey = sessionStorage.getItem('narra-click-' + link.id) ?? ''; } catch {}
     if (!data.activity.some(e => e.track === clickEventKey && clickEventKey)) {
-      clickEventKey = 'TR-' + Date.now();
+      clickEventKey = 'TR-' + crypto.randomUUID();
       data.activity.push({ at: TODAY, partner: link.partner, link: link.id, campaign: link.campaign, click: 1, unique: 1, l0: 0, free: 0, track: clickEventKey });
       saveState(data);
       try { sessionStorage.setItem('narra-click-' + link.id, clickEventKey); } catch {}
@@ -901,16 +941,37 @@ function startReferral() {
   drawReferral();
 }
 
+function referralCampaign(link) {
+  if (!link) return null;
+  const partner = findData('partners', link.partner);
+  return data.campaigns.find(c => c.id === link.campaign && campaignStatus(c) === 'live' && c.members[partner.id] === 'joined' && inAudience(c, partner));
+}
+
+const combo = { id: 'combo', product: 'Combo Narra + đối tác', months: 1, price: 399000 };
+
 function drawReferral() {
   const link = referralLink();
   shell.hidden = true;
   let area = document.querySelector('.referral');
   if (!area) { area = document.createElement('main'); area.className = 'referral'; document.body.prepend(area); }
+  const campaign = referralCampaign(link);
+  const includesCombo = campaign?.eligibleProduct === combo.product;
+  const plans = [...partnerPlans, ...(includesCombo ? [combo] : [])];
+  const selectedId = area.querySelector('#referral-plan')?.value;
+  const selected = plans.find(plan => plan.id === selectedId)?.id ?? (includesCombo ? combo.id : partnerPlans[0].id);
+  const selection = area.querySelector('#referral-purchase')?.value;
+  const choices = link && !trial.plus ? `<div class="form-grid referral-choices">
+    <label class="field"><span>Gói và kỳ thanh toán</span><select id="referral-plan">
+      ${optionList(plans.map(plan => [plan.id, `${planLabel(plan)} · ${money(data.mechanism.prices[plan.id] ?? plan.price)}`]), selected)}
+    </select></label>
+    <label class="field"><span>Loại giao dịch</span><select id="referral-purchase">${optionList([['new', 'Mua mới'], ['renewal', 'Gia hạn']], selection ?? 'new')}</select></label>
+  </div>` : '';
   area.innerHTML = `<section class="card">${brandMark}
-    <h1>Narra Speaking Coach</h1><p>${link ? `Bạn đang mở link ${esc(link.code)}. Tại đây bạn có thể thử luồng đăng ký Free và mua Plus.` : 'Link giới thiệu này hiện không khả dụng.'}</p>
+    <h1>Narra Speaking Coach</h1><p>${link ? `Bạn đang mở link ${esc(link.code)}. Tại đây bạn có thể thử luồng đăng ký Free và mua gói trả phí.` : 'Link giới thiệu này hiện không khả dụng.'}</p>
+    ${choices}
     <div class="referral-actions">
       ${link ? `<button class="btn btn-secondary" data-action="simulate-lead" ${trial.lead ? 'disabled' : ''}>${trial.lead ? 'Đã ghi nhận đăng ký Free' : 'Mô phỏng đăng ký Free'}</button>
-      <button class="btn btn-primary" data-action="simulate-plus" ${trial.plus ? 'disabled' : ''}>${trial.plus ? 'Đã ghi nhận đơn Plus' : 'Mô phỏng mua Plus'}</button>` : ''}
+      <button class="btn btn-primary" data-action="simulate-plus" ${trial.plus ? 'disabled' : ''}>${trial.plus ? 'Đã ghi nhận giao dịch' : 'Mô phỏng giao dịch'}</button>` : ''}
       <a class="btn btn-secondary" href="${location.pathname}${route('affiliate', 'overview')}">Về cổng Đại sứ</a>
     </div>
   </section>`;
@@ -920,7 +981,8 @@ function simulate(type) {
   const link = referralLink();
   const tracking = data.activity.find(e => e.track === clickEventKey);
   if (!link || !tracking) throw new Error('Link giới thiệu hiện không khả dụng.');
-  if (!trial.lead) {
+  const purchase = document.querySelector('#referral-purchase')?.value === 'renewal' ? 'renewal' : 'new';
+  if (!trial.lead && (type === 'lead' || purchase === 'new')) {
     tracking.l0 = 1;
     tracking.free = 1;
     trial.lead = true;
@@ -928,29 +990,27 @@ function simulate(type) {
   if (type === 'plus' && !trial.plus) {
     const partner = findData('partners', link.partner);
     const policy = policyAt(data);
-    const candidate = data.campaigns.find(c => c.id === link.campaign && campaignStatus(c) === 'live' && c.members[partner.id] === 'joined' && inAudience(c, partner));
-    const orderProduct = candidate?.eligibleProduct ?? 'Narra Plus';
-    const amount = orderProduct === 'Narra Plus' ? 199000 : 399000;
-    const baseRate = policy[partner.group];
-    const enhancedRate = candidate?.kind === 'rate' ? candidate.value : baseRate * (candidate?.kind === 'multiplier' ? candidate.value : 1);
-    const bonus = candidate?.kind === 'fixed' ? candidate.value : 0;
-    const claimed = data.orders.filter(o => o.campaign === candidate?.id).reduce((total, o) =>
-      total + Math.max(0, commission(o) - Math.round((o.amount - o.refund) * o.baseRate / 100)), 0);
-    const promised = Math.round(amount * enhancedRate / 100) + bonus - Math.round(amount * baseRate / 100);
-    const applied = candidate && claimed + promised <= candidate.budget;
-    const rate = applied ? enhancedRate : baseRate;
+    const candidate = referralCampaign(link);
+    const planId = document.querySelector('#referral-plan')?.value ?? partnerPlans[0].id;
+    const isCombo = planId === combo.id && candidate?.eligibleProduct === combo.product;
+    const plan = isCombo ? combo : partnerPlans.find(item => item.id === planId);
+    if (!plan) throw new Error('Chọn gói và kỳ thanh toán để ghi nhận.');
+    const terms = commissionTerms(data.mechanism);
     const order = {
-      id: 'NR-' + String(Date.now()).slice(-8), partner: partner.id, link: link.id, campaign: applied ? candidate.id : '',
-      product: orderProduct, created: TODAY, paidAt: TODAY, approved: '', holdDays: policy.hold, version: policy.id,
-      amount, baseRate, rate, bonus: applied ? bonus : 0, status: 'pending', refund: 0, track: clickEventKey,
+      id: 'NR-' + crypto.randomUUID().slice(0, 8).toUpperCase(), partner: partner.id, link: link.id,
+      product: plan.product, months: plan.months, purchase, owner: clickEventKey,
+      created: TODAY, paidAt: TODAY, approved: '', holdDays: policy.hold, version: policy.id,
+      amount: data.mechanism.prices[plan.id] ?? combo.price, terms, status: 'pending', refund: 0, track: clickEventKey,
       history: [{ at: TODAY, text: 'Ghi nhận giao dịch mô phỏng qua link giới thiệu.' }],
     };
+    if (isCombo) order.terms = { ...terms, base: policy[partner.group], growth: policy[partner.group] };
+    Object.assign(order, quotePartnerOrder(data, order, candidate?.eligibleProduct === order.product ? candidate : null));
     data.orders.push(order);
     trial.plus = true;
   }
   saveState(data);
   drawReferral();
-  toast(type === 'plus' ? 'Đã ghi nhận đơn Plus đang chờ xác minh.' : 'Đã ghi nhận một đăng ký hợp lệ và kích hoạt Free.');
+  toast(type === 'plus' ? 'Đã ghi nhận giao dịch đang chờ xác minh.' : 'Đã ghi nhận một đăng ký hợp lệ và kích hoạt Free.');
 }
 
 mobile.addEventListener('change', () => {

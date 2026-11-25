@@ -1,4 +1,7 @@
-Copyright 2021 The Be Vietnam Pro Project Authors (https://github.com/bettergui/BeVietnamPro),
+Vietnamese localization by Vntype.Com and FontZin.Com
+https://fontzin.com/poppins-viet-hoa/
+
+Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

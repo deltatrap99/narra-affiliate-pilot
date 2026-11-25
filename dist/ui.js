@@ -1,4 +1,5 @@
 import { GROUPS, TODAY, date, number, money, percent } from './model.js';
+import { partnerCode, safeAvatar } from './partner-profile.js';
 
 export const icon = (name, className = '') => `<span class="symbol ${className}" aria-hidden="true">${name}</span>`;
 export const brandMark = '<span class="brand-mark" aria-hidden="true"><img src="assets/narra-n.png" alt="" width="28" height="28"></span>';
@@ -19,7 +20,7 @@ export const merchantNav = [
 ];
 export const affiliateNav = [
   ['overview', 'Tổng quan', 'dashboard'],
-  ['policy', 'Chính sách & quyền lợi', 'description'],
+  ['policy', 'Cơ chế đối tác', 'description'],
   ['campaigns', 'Chiến dịch', 'campaign'],
   ['tools', 'Công cụ quảng bá', 'link'],
   ['orders', 'Hiệu quả giới thiệu', 'monitoring'],
@@ -41,7 +42,11 @@ export function badge(status, label) {
   return `<span class="badge badge-${tone}"><span aria-hidden="true"></span>${esc(label ?? defaultLabel)}</span>`;
 }
 
-export const avatar = (person, size = '') => `<span class="avatar ${esc(person?.tone ?? 'violet')} ${size}" aria-hidden="true">${esc(person?.name?.split(/\s+/).slice(0, 2).map(word => word[0]).join('') ?? 'N')}</span>`;
+export function avatar(person, size = '') {
+  const picture = safeAvatar(person?.avatar);
+  const initials = person?.name?.split(/\s+/).slice(0, 2).map(word => word[0]).join('') ?? 'N';
+  return `<span class="avatar ${esc(person?.tone ?? 'violet')} ${size}" aria-hidden="true">${picture ? `<img src="${picture}" alt="">` : esc(initials)}</span>`;
+}
 export const groupName = group => GROUPS[group] ?? 'Tất cả nhóm';
 export const groupShort = group => ({ DSGD: 'ĐSGD', DSSV: 'ĐSSV' }[group] ?? 'Tất cả nhóm');
 export const formatRange = range => `${date(range.start, false)} - ${date(range.end)}`;
@@ -79,7 +84,7 @@ export function table(headers, rows, emptyTitle = 'Chưa có dữ liệu', empty
 
 export const recordLink = (type, id, label = id) => `<button type="button" class="record-link" data-action="detail" data-type="${type}" data-id="${esc(id)}">${esc(label)}</button>`;
 
-export const personCell = (person, link = true) => person ? `<div class="person-cell">${avatar(person)}<span>${link ? recordLink('partner', person.id, person.name) : `<strong>${esc(person.name)}</strong>`}<small>${esc(groupShort(person.group))} · ${esc(person.id)}</small></span></div>` : 'Chưa có';
+export const personCell = (person, link = true) => person ? `<div class="person-cell">${avatar(person)}<span>${link ? recordLink('partner', person.id, person.name) : `<strong>${esc(person.name)}</strong>`}<small>${esc(groupShort(person.group))} · ${esc(partnerCode(person))}</small></span></div>` : 'Chưa có';
 
 export const cardTitle = (title, caption = '', extra = '') => `<div class="card-head"><div><h2>${esc(title)}</h2>${caption ? `<p>${esc(caption)}</p>` : ''}</div>${extra}</div>`;
 

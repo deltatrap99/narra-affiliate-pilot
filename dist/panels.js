@@ -1,9 +1,12 @@
+import { goalTypes, goalTarget, goalValue, goalAmount, campaignProgressFor } from './campaign-progress.js';
+import { mechanismFields, partnerPlans, planLabel } from './partner-mechanism.js';
+import { partnerCode } from './partner-profile.js';
 import {
   TODAY, GROUPS, PARTNER_ID, date, number, money, percent, presets, includesDate, stats, policyAt,
   campaignStatus, inAudience, commission, orderStatus, earningStatus, holdEnd, batchFor, eligiblePayoutEntries,
 } from './model.js';
 import {
-  icon, esc, action, route, badge, avatar, formatRange, groupName, optionList, note, recordLink, table, statusText, sum,
+  icon, esc, action, route, badge, avatar, formatRange, groupName, optionList, note, recordLink, table, statusText, statIcon, sum,
 } from './ui.js';
 import { campaignBenefit, linkURL, metrics, orderTable } from './views.js';
 
@@ -60,6 +63,75 @@ export function campaignForm(ctx, campaign = null) {
   };
 }
 
+function campaignOffer(campaign, state) {
+  return `<section class="campaign-offer" aria-labelledby="campaign-benefit">
+    <img src="assets/pilot-ribbon.webp" alt="" class="campaign-offer-art">
+    <div>
+      <div class="campaign-offer-status"><span>Quyền lợi chiến dịch</span>${badge(state)}</div>
+      <h3 id="campaign-benefit">${esc(campaignBenefit(campaign))}</h3>
+      <p>Áp dụng cho đơn ${esc(campaign.eligibleProduct)} mua mới đủ điều kiện.</p>
+    </div>
+  </section>`;
+}
+
+function campaignGuidance(campaign, state, member, progress) {
+  if (state === 'ended') return 'Bạn có thể đối chiếu kết quả với các mốc bên trên và kiểm tra hoa hồng đã ghi nhận.';
+  if (state === 'paused') return 'Chiến dịch đang tạm dừng. Bạn có thể kiểm tra lại các kết quả đã ghi nhận.';
+  if (member === 'pending') return 'Đăng ký của bạn đang chờ duyệt. Khi được duyệt, bạn có thể lấy link riêng của chiến dịch.';
+  if (!member) return 'Hãy tham gia chiến dịch để lấy link riêng, sau đó theo dõi kết quả từ những lượt giới thiệu qua link đó.';
+  if (state === 'scheduled') return `Chiến dịch bắt đầu ngày ${date(campaign.start)}. Bạn có thể chuẩn bị bài giới thiệu và lưu link từ bây giờ.`;
+  if (progress.totalGoals && progress.achieved === progress.totalGoals) return 'Bạn đã đạt tất cả các mốc đặt ra. Hãy kiểm tra danh sách đơn để biết khi nào hoa hồng được ghi nhận.';
+  const nearest = progress.items.filter(item => item.target > 0 && item.left > 0)
+    .sort((a, b) => a.left / a.target - b.left / b.target)[0];
+  return nearest ? `Bạn còn thiếu ${goalAmount(nearest, nearest.left)} để đạt mốc ${nearest.label.toLowerCase()}. Hãy ưu tiên hạng mục này khi chia sẻ link chiến dịch.` :
+    'Hãy chia sẻ link chiến dịch để theo dõi đăng ký, kích hoạt Free và các đơn đủ điều kiện.';
+}
+
+function personalCampaignProgress(ctx, campaign, person, state, member) {
+  const progress = campaignProgressFor(ctx.data, campaign, person.id);
+  const activeLink = ctx.data.links.find(l => l.partner === person.id && l.campaign === campaign.id && l.active);
+  return `<section class="campaign-progress" aria-labelledby="campaign-progress-heading">
+    <div class="campaign-progress-heading">
+      <div><h3 id="campaign-progress-heading">Tiến độ của bạn</h3><p>${formatRange({ start: campaign.start, end: campaign.end })} · ${progress.achieved}/${progress.totalGoals} mốc đã đạt</p></div>
+      ${member ? badge(member, member === 'pending' ? 'Chờ duyệt' : 'Đã tham gia') : badge('muted', 'Chưa tham gia')}
+    </div>
+    <div class="campaign-goals">${progress.items.filter(item => item.id !== 'revenue' || item.target).map(item => {
+      const hasTarget = item.target > 0;
+      const reached = hasTarget && item.left === 0;
+      const detail = hasTarget ? (reached ? 'Đã đạt mục tiêu' : `Còn ${goalAmount(item, item.left)}`) : 'Theo dõi kết quả';
+      const waiting = item.id === 'orders' && progress.pending ? ` · ${number(progress.pending)} đơn chờ xác minh` : '';
+      return `<article class="campaign-goal">
+        <div class="campaign-goal-title">${statIcon(item.icon, item.tone)}<h4>${item.label}</h4></div>
+        <div class="campaign-goal-count"><strong>${goalValue(item, item.current)}</strong>${hasTarget ? `<span>/ ${goalValue(item, item.target)}</span>` : ''}</div>
+        ${hasTarget ? `<progress class="campaign-meter tone-${item.tone}" value="${Math.min(item.current, item.target)}" max="${item.target}" aria-label="${item.label}"></progress>` : ''}
+        <div class="campaign-goal-detail">
+          <p class="${reached ? 'campaign-goal-achieved' : ''}">${detail}${waiting}</p>
+          ${hasTarget ? `<span>${percent(Math.min(100, item.current / item.target * 100))}</span>` : ''}
+        </div>
+      </article>`;
+    }).join('')}</div>
+    <div class="campaign-next">
+      <img src="assets/narri-welcome.webp" width="54" height="54" alt="">
+      <div><strong>Việc nên làm tiếp</strong><p>${esc(campaignGuidance(campaign, state, member, progress))}</p></div>
+      ${member === 'joined' && ['live', 'scheduled'].includes(state)
+        ? activeLink ? action('Lấy link', 'detail', { symbol: 'link', attributes: detail('link', activeLink.id) })
+          : btn('Tạo link', 'new-link', campaign.id, 'secondary', 'link')
+        : ''}
+    </div>
+  </section>`;
+}
+
+export function campaignGoalsForm(ctx, campaign) {
+  if (!isMerchant(ctx)) return null;
+  return {
+    title: 'Chỉnh mốc thi đua', subtitle: campaign.name, form: 'campaign-goals', id: campaign.id,
+    body: fields(...goalTypes.map(item => entry(item.id === 'revenue' ? 'Doanh thu đủ điều kiện (VND)' : item.label, item.id,
+      goalTarget(campaign, item.id) || '', 'number', item.id === 'orders' ? 'required min="1" step="1"' : 'min="1" step="1"')))
+      + note('Mỗi mốc áp dụng cho một Đại sứ trong toàn thời gian chiến dịch. Để trống một hạng mục để theo dõi kết quả mà chưa đặt mốc.'),
+    footer: footer(cancel(), submit('Lưu mốc thi đua')),
+  };
+}
+
 function campaignDetail(ctx, campaign) {
   const person = partnerFor(ctx, PARTNER_ID);
   const merchant = isMerchant(ctx);
@@ -73,7 +145,6 @@ function campaignDetail(ctx, campaign) {
     .reduce((total, o) => total + Math.max(0, commission(o) - Math.round((o.amount - o.refund) * o.baseRate / 100)), 0);
   const relevant = ctx.data.orders.filter(o => o.campaign === campaign.id && ctx.ids.includes(o.partner) && includesDate(o.paidAt, ctx.range))
     .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
-  const activeLink = ctx.data.links.find(l => l.partner === PARTNER_ID && l.campaign === campaign.id && l.active);
   const roster = merchant ? `<h3 class="dialog-subtitle">Danh sách tham gia</h3>${table(['Đối tác', 'Trạng thái', 'Thao tác'], candidates.map(([id, status]) => [
     recordLink('partner', id, partnerFor(ctx, id)?.name ?? id),
     badge(status, status === 'pending' ? 'Chờ duyệt' : undefined),
@@ -83,15 +154,17 @@ function campaignDetail(ctx, campaign) {
     title: campaign.name,
     subtitle: `${campaign.id} · ${formatRange({ start: campaign.start, end: campaign.end })}`,
     size: 'wide',
-    body: `${badge(state)}<p>${esc(campaign.description)}</p>
+    body: `${campaignOffer(campaign, state)}
+    ${merchant ? '' : personalCampaignProgress(ctx, campaign, person, state, member)}
+    <section class="campaign-conditions"><h3>Điều kiện tham gia</h3><p>${esc(campaign.description)}</p>
     ${detailGrid([
-      ['Quyền lợi', esc(campaignBenefit(campaign))], ['Đối tượng', esc(groupName(campaign.group))],
+      ['Đối tượng', esc(groupName(campaign.group))],
       ['Gói đủ điều kiện', esc(campaign.eligibleProduct)], ['Cách tham gia', campaign.mode === 'approval' ? 'Chờ đội vận hành duyệt' : campaign.mode === 'auto' ? 'Tham gia tự động' : 'Tự đăng ký'],
-      ['Mục tiêu cá nhân', `${number(campaign.target)} đơn hợp lệ`], ['Quy tắc áp dụng', 'Theo ngày thanh toán, mỗi đơn ghi nhận một chiến dịch'],
-      ...(merchant ? [['Người phụ trách', esc(campaign.owner)], ['Ngân sách thưởng', `${money(awarded)} / ${money(campaign.budget)}`]]
-        : [['Trạng thái của bạn', member ? badge(member, member === 'pending' ? 'Chờ duyệt' : undefined) : 'Chưa tham gia'],
-          ['Tiến độ trong khoảng đã chọn', `${number(totals.plus)} / ${number(campaign.target)} đơn Plus`]]),
-    ])}
+      ['Quy tắc áp dụng', 'Theo ngày thanh toán, mỗi đơn ghi nhận một chiến dịch'],
+      ...(merchant ? [['Mốc mỗi Đại sứ', goalTypes.filter(item => goalTarget(campaign, item.id) > 0)
+        .map(item => `${esc(item.label)} ${goalValue(item, goalTarget(campaign, item.id))}`).join(' · ')]] : []),
+      ...(merchant ? [['Người phụ trách', esc(campaign.owner)], ['Ngân sách thưởng', `${money(awarded)} / ${money(campaign.budget)}`]] : []),
+    ])}</section>
     <h3>Hiệu quả từ ${formatRange(ctx.range)}</h3>
     ${detailGrid([
       ['Lượt nhấp / riêng biệt', `${number(totals.click)} / ${number(totals.unique)}`],
@@ -100,9 +173,9 @@ function campaignDetail(ctx, campaign) {
     ])}
     ${merchant && relevant.length ? `<h3>Đơn thuộc chiến dịch</h3>${orderTable(ctx, relevant)}` : ''}
     ${roster}
-    ${!merchant && member === 'joined' ? `<h3>Tài nguyên chiến dịch</h3><p>${activeLink ? recordLink('link', activeLink.id, activeLink.code) : btn('Tạo link chiến dịch', 'new-link', campaign.id, 'secondary', 'link')} <a class="text-link" download href="assets/pilot-ribbon.webp">Tải banner</a></p>` : ''}
-    ${campaign.id === 'GOLDEN26' ? note('Mức nhân đôi trong Golden Days là ví dụ dùng để kiểm tra luồng duyệt và đối soát.') : ''}`,
+    ${!merchant && member === 'joined' ? '<p><a class="text-link" download href="assets/pilot-ribbon.webp">Tải banner chiến dịch</a></p>' : ''}`,
     footer: footer(cancel(),
+      merchant ? btn('Chỉnh mốc thi đua', 'edit-campaign-goals', campaign.id, 'secondary', 'edit') : '',
       merchant && relevant.length ? action('Xuất báo cáo', 'export', { type: 'secondary', symbol: 'download', attributes: detail('campaign', campaign.id) }) : '',
       merchant && state === 'draft' ? btn('Sửa bản nháp', 'edit-campaign', campaign.id, 'secondary', 'edit') : '',
       merchant && state === 'draft' ? btn('Công bố', 'publish-campaign', campaign.id, 'primary', 'campaign') : '',
@@ -116,29 +189,31 @@ function campaignDetail(ctx, campaign) {
 function partnerDetail(ctx, partner) {
   if (!mayRead(ctx, partner.id)) return null;
   const merchant = isMerchant(ctx);
-  const p = policyAt(ctx.data);
   const values = stats(ctx.data, [partner.id], ctx.range);
   const rows = ctx.data.orders.filter(o => o.partner === partner.id && includesDate(o.paidAt, ctx.range))
     .sort((a, b) => b.paidAt.localeCompare(a.paidAt));
   const links = ctx.data.links.filter(l => l.partner === partner.id);
   const batches = ctx.data.batches.filter(b => b.entries.some(e => e.partner === partner.id));
   return {
-    title: partner.name, subtitle: `${partner.id} · ${groupName(partner.group)}`, size: 'wide',
+    title: partner.name, subtitle: `${partnerCode(partner)} · ${groupName(partner.group)}`, size: 'wide',
     body: `<div class="person-cell">${avatar(partner, 'large')}${badge(partner.status, partner.status === 'pending' ? 'Chờ duyệt hồ sơ' : undefined)}</div>
     ${detailGrid([
       ['Ngày gửi hồ sơ', date(partner.joined)], ['Kênh chính', esc(partner.channel)],
-      ['Nhóm đối tác', esc(groupName(partner.group))], ['Hoa hồng nền hiện hành', percent(p[partner.group])],
+      ['Nhóm đối tác', esc(groupName(partner.group))], ['Hoa hồng cơ bản', percent(ctx.data.mechanism.base)],
+      ['Email', esc(partner.email || 'Chưa có')], ['Số điện thoại', esc(partner.phone || 'Chưa có')],
+      ['Ngân hàng', esc(partner.bank || 'Chưa có')], ['Số tài khoản', partner.bankLast4 ? '•••• ' + esc(partner.bankLast4) : 'Chưa có'],
       ['L0 / Free / Plus', `${number(values.l0)} / ${number(values.free)} / ${number(values.plus)}`], ['Hoa hồng trong kỳ', money(values.com)],
     ])}
     <h3>Link giới thiệu</h3>
     <p>${links.length ? links.map(l => recordLink('link', l.id, l.code)).join(' · ') : 'Chưa có link giới thiệu.'}</p>
-    <h3>Đơn Plus trong khoảng ${formatRange(ctx.range)}</h3>
+    <h3>Đơn hàng trong khoảng ${formatRange(ctx.range)}</h3>
     ${orderTable({ ...ctx, role: 'affiliate' }, rows)}
     <h3>Lịch sử chi trả</h3>
     ${table(['Kỳ đối soát', 'Ngày chi', 'Số tiền'], batches.map(b => [
       recordLink('batch', b.id, b.name), date(b.paidAt), money(sum(b.entries.filter(e => e.partner === partner.id))),
     ]), 'Chưa có kỳ chi trả', '')}`,
     footer: footer(cancel(),
+      merchant ? btn('Chỉnh hồ sơ', 'edit-partner-profile', partner.id, 'primary', 'edit') : '',
       merchant && partner.status === 'active' ? btn('Tạm ngưng', 'pause-partner', partner.id, 'secondary') : '',
       merchant && partner.status === 'pending' ? btn('Từ chối', 'reject-partner', partner.id, 'danger') : '',
       merchant && ['pending', 'paused'].includes(partner.status) ? btn(partner.status === 'pending' ? 'Duyệt hồ sơ' : 'Kích hoạt lại', 'approve-partner', partner.id, 'primary', 'check') : ''),
@@ -175,6 +250,8 @@ function orderDetail(ctx, order) {
         ['Ngày hết giữ', date(holdEnd(order))], ['Giá trị thanh toán', money(order.amount)], ['Hoàn tiền', money(order.refund)],
         ['Giá trị đủ điều kiện', money(order.amount - order.refund)], ['Phiên bản chính sách', recordLink('policy', order.version)],
         ['Mức hoa hồng', `${percent(order.rate)}${order.bonus ? ' + ' + money(order.bonus) : ''}`],
+        ...(order.terms ? [['Loại giao dịch', order.purchase === 'renewal' ? 'Gia hạn' : 'Mua mới'], ['Kỳ gói', `${order.months} tháng`],
+          ['Cơ chế đối tác', `Phiên bản ${order.terms.revision}`]] : []),
         ['Hoa hồng hiện tại', money(commission(order))], ['Trạng thái chi', badge(earningStatus(ctx.data, order))],
         ...(batch ? [['Kỳ đối soát', recordLink('batch', batch.id)], ['Ngày chi', date(batch.paidAt)]] : []),
       ])}
@@ -308,14 +385,12 @@ function policyDetail(ctx, policy) {
 export function policyForm(ctx) {
   const p = policyAt(ctx.data);
   return {
-    title: 'Tạo phiên bản chính sách',
-    subtitle: 'Đặt ngày bắt đầu áp dụng và mức hoa hồng của từng nhóm.',
+    title: 'Tạo phiên bản điều kiện chi trả',
+    subtitle: 'Đặt ngày hiệu lực, cửa sổ ghi nhận và lịch thanh toán.',
     form: 'policy',
     body: fields(
       entry('Ngày hiệu lực', 'effective', TODAY, 'date', `required min="${TODAY}"`),
       selectField('Lịch chi trả', 'cadence', [['Hằng tháng', 'Hằng tháng'], ['Hai kỳ mỗi tháng', 'Hai kỳ mỗi tháng']], p.cadence),
-      entry('Hoa hồng ĐSGD (%)', 'DSGD', p.DSGD, 'number', 'required min="0" max="100" step="0.1"'),
-      entry('Hoa hồng ĐSSV (%)', 'DSSV', p.DSSV, 'number', 'required min="0" max="100" step="0.1"'),
       entry('Cửa sổ ghi nhận (ngày)', 'attribution', p.attribution, 'number', 'required min="1" step="1"'),
       entry('Thời gian giữ (ngày)', 'hold', p.hold, 'number', 'required min="0" step="1"'),
       entry('Ngưỡng chi trả (₫)', 'threshold', p.threshold, 'number', 'required min="0" step="1000"'),
@@ -341,21 +416,44 @@ export function metricPanel(ctx, key) {
   };
 }
 
-export function profilePanel(ctx) {
-  const p = ctx.data.profile;
-  if (isMerchant(ctx)) return {
+export function mechanismForm(ctx) {
+  const scheme = ctx.data.mechanism;
+  return {
+    title: 'Chỉnh cơ chế đối tác',
+    subtitle: 'Mức mới áp dụng cho các đơn được ghi nhận sau khi lưu.',
+    size: 'wide', form: 'mechanism',
+    body: fields(...mechanismFields.map(([key, label, attributes]) => entry(label, key, scheme[key], 'number', attributes)))
+      + '<h3>Giá thu một lần theo gói (VND)</h3>'
+      + fields(...partnerPlans.map(plan => entry(planLabel(plan), plan.id, scheme.prices[plan.id], 'number', 'required min="1" step="1"'))),
+    footer: footer(cancel(), submit('Lưu cơ chế')),
+  };
+}
+
+export function profilePanel(ctx, id = '') {
+  const merchant = isMerchant(ctx);
+  if (merchant && !id) return {
     title: 'Narra Admin', size: 'compact',
     body: detailGrid([['Cổng làm việc', 'Merchant Center'], ['Vai trò', 'Quản trị chương trình'], ['Múi giờ', 'Việt Nam (GMT+7)']]),
     footer: footer(cancel()),
   };
+  const partner = partnerFor(ctx, id || PARTNER_ID);
+  if (!partner || !mayRead(ctx, partner.id)) return null;
+  const partial = partner.bankLast4 && !partner.bankAccount ? `placeholder="Tài khoản kết thúc bằng ${esc(partner.bankLast4)}"` : '';
   return {
-    title: 'Hồ sơ tài khoản', subtitle: groupName(partnerFor(ctx, PARTNER_ID).group), form: 'profile',
-    body: fields(
-      entry('Tên hiển thị', 'name', p.name, 'text', 'required maxlength="60"'),
-      entry('Email liên hệ', 'email', p.email, 'email', 'maxlength="80"'),
-      entry('Ngân hàng nhận tiền', 'bank', p.bank, 'text', 'maxlength="60"'),
-      entry('4 số cuối tài khoản', 'bankLast4', p.bankLast4, 'text', 'inputmode="numeric" pattern="[0-9]{4}" maxlength="4"'),
-    ) + (p.verification ? note('Thông tin nhận tiền đang chờ xác minh.') : ''),
+    title: merchant ? 'Chỉnh hồ sơ đối tác' : 'Hồ sơ tài khoản',
+    subtitle: `${partnerCode(partner)} · ${groupName(partner.group)}`,
+    form: 'profile', id: partner.id,
+    body: `<div class="profile-avatar-edit">${avatar(partner, 'large')}<div>
+      <label class="field"><span>Đổi ảnh đại diện</span><input name="avatar" type="file" accept="image/jpeg,image/png,image/webp"><small>JPG, PNG hoặc WebP, tối đa 8 MB.</small></label>
+      ${partner.avatar ? checks('removeAvatar', 'Gỡ ảnh hiện tại', false) : ''}
+    </div></div>` + fields(
+      entry('Tên hiển thị', 'name', partner.name, 'text', 'required maxlength="60" autocomplete="name"'),
+      entry('Mã đối tác', 'code', partnerCode(partner), 'text', merchant ? 'required maxlength="32"' : 'readonly'),
+      entry('Email', 'email', partner.email, 'email', 'maxlength="254" autocomplete="email"'),
+      entry('Số điện thoại', 'phone', partner.phone, 'tel', 'maxlength="22" autocomplete="tel"'),
+      entry('Ngân hàng nhận tiền', 'bank', partner.bank, 'text', 'maxlength="60" autocomplete="off"'),
+      entry('Số tài khoản ngân hàng', 'bankAccount', partner.bankAccount, 'text', `inputmode="numeric" maxlength="30" autocomplete="off" ${partial}`),
+    ) + (partner.verification ? note('Thông tin nhận tiền đang chờ xác minh.') : ''),
     footer: footer(cancel(), submit('Lưu thông tin')),
   };
 }

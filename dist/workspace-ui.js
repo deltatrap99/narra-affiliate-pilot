@@ -1,5 +1,6 @@
 import { PARTNER_ID, inAudience, orderStatus, date } from './model.js';
 import { icon, esc, matches, route, statusText, groupName } from './ui.js';
+import { partnerCode } from './partner-profile.js';
 
 export function appearanceMenu(theme, layout) {
   const choices = (setting, options, selected) => options.map(([key, label, glyph]) => `<button class="appearance-option" type="button" data-action="appearance" data-type="${setting}" data-value="${key}" aria-pressed="${selected === key}">${icon(glyph)}<span>${label}</span></button>`).join('');
@@ -36,8 +37,8 @@ export function commandResults(ctx, nav, search) {
     }
     if (merchant) {
       for (const p of data.partners) {
-        if (!matches(query, p.name, p.id, groupName(p.group))) continue;
-        results.push({ label: p.name, caption: `Đối tác · ${p.id}`, symbol: 'group', type: 'partner', id: p.id });
+        if (!matches(query, p.name, partnerCode(p), groupName(p.group))) continue;
+        results.push({ label: p.name, caption: `Đối tác · ${partnerCode(p)}`, symbol: 'group', type: 'partner', id: p.id });
       }
     }
     for (const o of [...data.orders].reverse()) {
