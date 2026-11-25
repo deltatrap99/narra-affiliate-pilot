@@ -39,7 +39,9 @@ const people = [
   { id: 'AF-007', name: 'Bảo Ngọc', group: 'DSGD', status: 'pending', joined: '2026-11-25', channel: 'Facebook', tone: 'green' },
 ];
 
-export const PARTNER_ID = 'AF-001';
+const SAMPLE_PARTNER_ID = 'AF-001';
+export let PARTNER_ID = SAMPLE_PARTNER_ID;
+export function selectAffiliate(id) { PARTNER_ID = id ?? SAMPLE_PARTNER_ID; }
 
 function seed() {
   const partners = people.map(p => ({ ...p }));
@@ -70,7 +72,7 @@ function seed() {
       const click = 18 + cycle + (i * 7 + day * 11) % 32 + Math.floor(day * .47) + (i === 0 ? 9 : 0);
       let l0 = Math.round(click * (.083 + (day + i) % 4 * .012));
       let free = Math.round(l0 * (.29 + (day * 3 + i) % 6 * .04));
-      if (p.id === PARTNER_ID && day >= numDays(start, TODAY) - 7) {
+      if (p.id === SAMPLE_PARTNER_ID && day >= numDays(start, TODAY) - 7) {
         const weekDay = day - (numDays(start, TODAY) - 7);
         l0 = [4, 6, 5, 4, 7, 5, 7][weekDay];
         free = [1, 3, 2, 1, 3, 2, 3][weekDay];
@@ -95,7 +97,7 @@ function seed() {
   const addExample = (id, at, status, extra = {}) => {
     const approved = status === 'pending' || status === 'rejected' ? '' : addDays(at, 1);
     orders.push({
-      id, partner: PARTNER_ID, link: 'LK-101', campaign: '', product: 'Narra Plus',
+      id, partner: SAMPLE_PARTNER_ID, link: 'LK-101', campaign: '', product: 'Narra Plus',
       created: at, paidAt: at, approved, holdDays: 7, version: 'v1.1',
       amount: 199000, baseRate: 15, rate: 15, bonus: 0, status, refund: 0,
       history: [{ at, text: 'Ghi nhận giao dịch từ link giới thiệu.' }, ...(approved ? [{ at: approved, text: 'Đã xác nhận chuyển đổi.' }] : [])],
@@ -120,7 +122,7 @@ export function readState() {
     if (saved?.partners && saved.policies) {
       const legacy = saved.profile ?? {};
       if ('name' in legacy) {
-        const person = saved.partners.find(partner => partner.id === PARTNER_ID);
+        const person = saved.partners.find(partner => partner.id === SAMPLE_PARTNER_ID);
         if (person) {
           const { name, email, bank, bankLast4, verification } = legacy;
           Object.assign(person, { name: name || person.name, email, bank, bankLast4, verification: Boolean(verification) });
@@ -136,7 +138,12 @@ export function readState() {
 
 export function saveState(data) {
   try {
-    localStorage.setItem(localStore, JSON.stringify(data));
+    const partners = data.partners.map(person => {
+      if (!person.portalAccount) return person;
+      const { id, code, group, status, joined, channel, tone } = person;
+      return { id, code, group, status, joined, channel, tone, portalAccount: true, name: 'Đối tác' };
+    });
+    localStorage.setItem(localStore, JSON.stringify({ ...data, partners }));
     return true;
   } catch {
     return false;

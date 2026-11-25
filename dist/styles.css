@@ -551,6 +551,17 @@ dialog.wide { width: min(840px, calc(100% - 30px)); }
 .toast { border: 1px solid var(--line); border-radius: 11px; box-shadow: 0 6px 24px #35204a20; display: flex; gap: 8px; align-items: center; padding: 10px 13px; background: var(--paper); color: var(--ink); font-size: .85rem; max-width: min(375px, calc(100vw - 34px)); animation: dialog-in .15s ease-out; }
 .toast .symbol { color: var(--violet); }
 .toast.error .symbol { color: var(--negative); }
+.dialog-feedback:not(:empty) { padding: 12px 20px 0; }
+.dialog-feedback .toast {
+  max-width: none;
+  box-shadow: none;
+  background: var(--lavender);
+  border-color: color-mix(in srgb, var(--violet) 28%, var(--line));
+}
+.dialog-feedback .toast.error {
+  background: color-mix(in srgb, var(--negative) 10%, var(--paper));
+  border-color: color-mix(in srgb, var(--negative) 28%, var(--line));
+}
 .referral { display: grid; place-items: center; padding: 24px; min-height: 100dvh; }
 .referral .card { max-width: 580px; padding: 24px; }
 .referral h1 { font-size: 2rem; letter-spacing: -.055em; margin-top: 13px; }

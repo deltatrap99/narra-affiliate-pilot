@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4fb">
+  <meta name="description" content="Cổng Narra Affiliate để đối tác đăng nhập, xin cấp mã và theo dõi chương trình.">
+  <title>Narra Affiliate</title>
+  <link rel="icon" href="/assets/narra-icon.png" type="image/png">
+  <link rel="preload" href="/assets/narra-poppins-400.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/assets/fonts.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/landing.css">
+  <script type="module" src="/landing.js"></script>
+</head>
+<body class="landing-page">
+  <a class="skip-link" href="#entry">Đến biểu mẫu</a>
+  <header class="portal-header">
+    <a href="/" class="portal-brand" aria-label="Trang chủ Narra Affiliate">
+      <span class="brand-mark" aria-hidden="true"><img src="/assets/narra-n.png" width="28" height="28" alt=""></span>
+      <strong>Narra Affiliate</strong>
+    </a>
+    <a class="btn btn-secondary" href="#/quan-tri"><span class="symbol" aria-hidden="true">shield</span>Đăng nhập Quản trị viên</a>
+  </header>
+  <main class="portal-layout">
+    <section class="portal-hero" aria-labelledby="portal-title">
+      <div class="portal-hero-copy">
+        <h1 id="portal-title">Trang Quản trị cho Đối tác <span>Affiliate</span></h1>
+        <p>Theo dõi chiến dịch, kết quả giới thiệu và hoa hồng của bạn cùng Narra.</p>
+      </div>
+      <div class="portal-illustration">
+        <span aria-hidden="true" class="portal-orbit"></span>
+        <div class="portal-greeting">Chào bạn, Narri đây!</div>
+        <img src="/assets/narri-welcome.webp" width="284" height="304" alt="">
+      </div>
+    </section>
+    <div class="portal-entry" id="entry" tabindex="-1">
+      <section class="entry-card" data-panel="login">
+        <div class="entry-icon"><span class="symbol" aria-hidden="true">person</span></div>
+        <h2 tabindex="-1">Đăng nhập đối tác</h2>
+        <p>Nhập mã đối tác đã được cấp và mật khẩu của bạn.</p>
+        <form data-access-form="login">
+          <label class="field"><span>Mã đối tác</span><input name="code" type="text" autocomplete="username" autocapitalize="characters" spellcheck="false" maxlength="32" placeholder="Ví dụ NAR-…" required></label>
+          <label class="field"><span>Mật khẩu</span><span class="password-input"><input id="login-password" name="password" type="password" autocomplete="current-password" maxlength="128" required><button type="button" class="password-toggle" data-password="login-password" aria-pressed="false">Hiện</button></span></label>
+          <a class="entry-link entry-forgot" href="#/quen-mat-khau">Quên mật khẩu</a>
+          <p role="alert" class="entry-error" hidden></p>
+          <button type="submit" class="btn btn-primary entry-submit">Đăng nhập</button>
+        </form>
+        <div class="entry-divider"><span>Chưa có mã đối tác?</span><a href="#/xin-cap-ma" class="entry-link">Xin cấp mã đối tác</a></div>
+        <a href="/portal" class="entry-link" id="resume-session" hidden>Tiếp tục phiên đang đăng nhập</a>
+      </section>
+
+      <section class="entry-card" data-panel="merchant" hidden>
+        <a href="#/" class="entry-link entry-back">Về đăng nhập đối tác</a>
+        <div class="entry-icon"><span class="symbol" aria-hidden="true">storefront</span></div>
+        <h2 tabindex="-1">Merchant Center</h2>
+        <p>Tiếp tục bằng tài khoản đang có quyền quản trị cổng Narra.</p>
+        <form data-access-form="merchant">
+          <p role="alert" class="entry-error" hidden></p>
+          <button type="submit" class="btn btn-primary entry-submit">Đăng nhập Quản trị viên</button>
+        </form>
+      </section>
+
+      <section class="entry-card" data-panel="recover" hidden>
+        <a href="#/" class="entry-link entry-back">Về đăng nhập</a>
+        <div class="entry-icon"><span class="symbol" aria-hidden="true">lock</span></div>
+        <h2 tabindex="-1">Quên mật khẩu</h2>
+        <p>Gửi mã đối tác và email đã đăng ký để Quản trị viên hỗ trợ đặt lại mật khẩu.</p>
+        <form data-access-form="recover">
+          <label class="field"><span>Mã đối tác</span><input name="code" autocomplete="username" autocapitalize="characters" spellcheck="false" maxlength="32" required></label>
+          <label class="field"><span>Email đã đăng ký</span><input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+          <p role="alert" class="entry-error" hidden></p>
+          <button type="submit" class="btn btn-primary entry-submit">Gửi yêu cầu đặt lại</button>
+        </form>
+      </section>
+
+      <section class="entry-card" data-panel="reset" hidden>
+        <a href="#/" class="entry-link entry-back">Về đăng nhập</a>
+        <div class="entry-icon"><span class="symbol" aria-hidden="true">lock</span></div>
+        <h2 tabindex="-1">Đặt lại mật khẩu</h2>
+        <p>Chọn mật khẩu mới cho tài khoản đối tác.</p>
+        <form data-access-form="reset">
+          <label class="field"><span>Mật khẩu mới</span><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+          <label class="field"><span>Nhập lại mật khẩu</span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+          <p role="alert" class="entry-error" hidden></p>
+          <button type="submit" class="btn btn-primary entry-submit">Lưu mật khẩu mới</button>
+        </form>
+      </section>
+
+      <section class="entry-card entry-register" data-panel="apply" hidden>
+        <a href="#/" class="entry-link entry-back">Về đăng nhập</a>
+        <h2 tabindex="-1">Xin cấp mã đối tác</h2>
+        <p>Điền hồ sơ để Quản trị viên xét duyệt. Mật khẩu bạn tạo sẽ dùng khi mã được cấp.</p>
+        <form data-access-form="apply">
+          <label class="entry-photo">
+            <span class="entry-photo-mark"><span class="symbol" aria-hidden="true">person_add</span><img id="apply-preview" alt="" hidden></span>
+            <span><strong>Ảnh đại diện</strong><small>JPG, PNG hoặc GIF tối đa 3,1 MB.</small><input name="photo" type="file" accept="image/jpeg,image/png,image/gif" aria-label="Tải ảnh đại diện"></span>
+          </label>
+          <div class="form-grid">
+            <label class="field"><span>Họ <b>*</b></span><input name="surname" autocomplete="family-name" maxlength="50" required></label>
+            <label class="field"><span>Tên <b>*</b></span><input name="givenName" autocomplete="given-name" maxlength="65" required></label>
+            <label class="field"><span>Giới tính <b>*</b></span><select name="gender" required>
+              <option value="">Chọn giới tính</option><option>Nam</option><option>Nữ</option><option>Khác</option><option>Không muốn cung cấp</option>
+            </select></label>
+            <label class="field"><span>Email cá nhân <b>*</b></span><input name="email" type="email" autocomplete="email" maxlength="254" required></label>
+            <label class="field"><span>Ngày sinh <b>*</b></span><input name="birth" type="date" autocomplete="bday" required></label>
+            <label class="field"><span>Số CMT/CCCD <b>*</b></span><input name="nationalId" inputmode="numeric" maxlength="12" spellcheck="false" autocomplete="off" pattern="(?:[0-9]{9}|[0-9]{12})" required></label>
+            <label class="field"><span>Số điện thoại chính <b>*</b></span><input name="phone" type="tel" autocomplete="tel" maxlength="24" placeholder="+84 hoặc 0…" required></label>
+            <label class="field"><span>Số điện thoại khác</span><input name="phone2" type="tel" maxlength="24" placeholder="+84 hoặc 0…"></label>
+            <label class="field"><span>Nghề nghiệp</span><input name="occupation" list="entry-occupations" maxlength="80"><datalist id="entry-occupations"><option>Giáo viên</option><option>Sinh viên</option><option>Coach</option><option>Cộng tác viên</option></datalist></label>
+            <label class="field"><span>Mã đại sứ giới thiệu</span><input name="referrer" maxlength="32"></label>
+            <label class="field"><span>Tỉnh/thành phố <b>*</b></span><input name="province" list="entry-provinces" autocomplete="address-level1" maxlength="70" required>
+              <datalist id="entry-provinces"><option>Hà Nội</option><option>TP. Hồ Chí Minh</option><option>Đà Nẵng</option><option>Hải Phòng</option><option>Huế</option><option>Cần Thơ</option><option>An Giang</option><option>Bắc Ninh</option><option>Cà Mau</option><option>Cao Bằng</option><option>Đắk Lắk</option><option>Điện Biên</option><option>Đồng Nai</option><option>Đồng Tháp</option><option>Gia Lai</option><option>Hà Tĩnh</option><option>Hưng Yên</option><option>Khánh Hòa</option><option>Lai Châu</option><option>Lâm Đồng</option><option>Lạng Sơn</option><option>Lào Cai</option><option>Nghệ An</option><option>Ninh Bình</option><option>Phú Thọ</option><option>Quảng Ngãi</option><option>Quảng Ninh</option><option>Quảng Trị</option><option>Sơn La</option><option>Tây Ninh</option><option>Thái Nguyên</option><option>Thanh Hóa</option><option>Tuyên Quang</option><option>Vĩnh Long</option></datalist>
+            </label>
+            <label class="field"><span>Bạn đã có đại sứ cấp trên? <b>*</b></span><select name="supervisor" required><option value="no">Không</option><option value="yes">Có</option></select></label>
+            <label class="field wide-field" id="supervisor-field" hidden><span>Mã đại sứ cấp trên <b>*</b></span><input name="supervisorCode" maxlength="32" disabled></label>
+            <label class="field"><span>Mật khẩu <b>*</b></span><input name="password" type="password" autocomplete="new-password" minlength="10" maxlength="128" required><small>Từ 10 ký tự.</small></label>
+            <label class="field"><span>Nhập lại mật khẩu <b>*</b></span><input name="confirmPassword" type="password" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+          </div>
+          <div class="entry-consent">
+            <input id="entry-terms" name="consent" type="checkbox" required aria-describedby="entry-terms-link">
+            <label for="entry-terms">Tôi đồng ý với</label>
+            <a id="entry-terms-link" href="https://ge-policies.vercel.app/ams" target="_blank" rel="noopener noreferrer" class="entry-link">Điều khoản dịch vụ</a>
+          </div>
+          <p role="alert" class="entry-error" hidden></p>
+          <button type="submit" class="btn btn-primary entry-submit">Gửi yêu cầu cấp mã</button>
+        </form>
+      </section>
+
+      <section class="entry-card" data-panel="result" aria-live="polite" hidden>
+        <div class="entry-icon"><span class="symbol" aria-hidden="true">check_circle</span></div>
+        <h2 id="result-title" tabindex="-1"></h2>
+        <p id="result-copy"></p>
+        <div id="result-reference" hidden><span>Mã đối tác dành cho bạn</span><strong id="result-code"></strong></div>
+        <a href="#/" class="btn btn-primary entry-submit">Về đăng nhập</a>
+      </section>
+    </div>
+  </main>
+  <noscript>Vui lòng bật JavaScript để đăng nhập Narra Affiliate.</noscript>
+</body>
+</html>

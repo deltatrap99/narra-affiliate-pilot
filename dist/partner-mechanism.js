@@ -1,5 +1,3 @@
-export const mechanismSource = 'https://docs.google.com/spreadsheets/d/1Zw2WCy3I7Xr-5z9oWOjqLkGRmOt0yhSEplbYIsbmR80/edit?gid=2026111602#gid=2026111602';
-
 export const partnerPlans = [
   { id: 'plus-1', product: 'Narra Plus', months: 1, price: 119000 },
   { id: 'plus-3', product: 'Narra Plus', months: 3, price: 357000 },

@@ -1,9 +1,11 @@
 import { readCampaignGoals } from './campaign-progress.js';
 import { partnerPlans, planLabel, commissionTerms, readMechanismFields } from './partner-mechanism.js';
 import { profileFields, prepareAvatar } from './partner-profile.js';
+import { portalRequest } from './portal-api.js';
+import { accessLists, applicationPanel, recoveryLinkPanel } from './access-admin.js';
 import {
   TODAY, GROUPS, PARTNER_ID, date, number, money, percent, initialRange, includesDate, numDays,
-  readState, saveState, selectPartners, stats, policyAt, campaignStatus, inAudience, commission,
+  readState, saveState, selectAffiliate, selectPartners, stats, policyAt, campaignStatus, inAudience, commission,
   orderStatus, eligiblePayoutEntries, decideOrder, refundOrder, newLink, record, quotePartnerOrder,
 } from './model.js';
 import { icon, brandMark, esc, avatar, groupName, route, action, optionList, merchantNav, affiliateNav, statusText, sum } from './ui.js';
@@ -31,6 +33,43 @@ const preferencesKey = 'narra-affiliate-preferences-v1';
 const defaultWidth = 248;
 const minimumWidth = 218;
 const maximumWidth = 352;
+const portalMode = location.pathname === '/portal';
+let portalSession = null;
+let sessionError = '';
+
+if (portalMode) {
+  try {
+    ({ session: portalSession } = await portalRequest('/api/session'));
+  } catch (error) {
+    if (error.status !== 401) sessionError = error.message;
+  }
+}
+selectAffiliate(portalSession?.account?.id);
+
+function mergeAccount(state, account) {
+  const found = state.partners.find(person => person.id === account.id);
+  const profile = {
+    status: 'active', joined: TODAY, channel: 'Chưa có kênh', tone: 'violet', ...account,
+  };
+  if (found) Object.assign(found, profile);
+  else state.partners.unshift(profile);
+}
+
+function workspaceData() {
+  const state = readState();
+  if (portalSession?.role === 'merchant') portalSession.partners.forEach(account => mergeAccount(state, account));
+  else if (portalSession?.account) mergeAccount(state, portalSession.account);
+  return state;
+}
+
+function rememberAccount(account) {
+  if (portalSession.role === 'merchant') {
+    const found = portalSession.partners.find(person => person.id === account.id);
+    if (found) Object.assign(found, account);
+    else portalSession.partners.unshift(account);
+  } else portalSession.account = account;
+  mergeAccount(data, account);
+}
 
 function readPreferences() {
   try { return JSON.parse(localStorage.getItem(preferencesKey)) ?? {}; }
@@ -38,8 +77,8 @@ function readPreferences() {
 }
 
 const preferences = readPreferences();
-let data = readState();
-let role = 'merchant';
+let data = workspaceData();
+let role = portalSession?.role ?? 'merchant';
 let page = 'overview';
 let range = preferences.range?.start && preferences.range?.end ? preferences.range : initialRange;
 let filters = { group: '', partner: '' };
@@ -75,7 +114,7 @@ function persistPreferences() {
 
 function ctx() {
   const partners = selectPartners(data, role, filters);
-  return { data, role, page, range, filters, view, grain, partners, ids: partners.map(p => p.id) };
+  return { data, role, page, range, filters, view, grain, partners, ids: partners.map(p => p.id), portal: portalSession };
 }
 
 function workspaceName(target = role) {
@@ -105,9 +144,11 @@ function buttonIcon(name, symbol, label, extra = '') {
 
 function workspacePicker(id) {
   const merchant = role === 'merchant';
+  const label = `<span class="workspace-icon">${icon(merchant ? 'storefront' : 'group')}</span>
+    <span class="workspace-copy"><strong>${workspaceName()}</strong><small>${merchant ? 'Quản trị chương trình' : 'Không gian đại sứ'}</small></span>`;
+  if (portalSession) return `<div class="workspace-switch workspace-role">${label}</div>`;
   return `<button class="workspace-switch" type="button" data-action="popup" data-value="${id}" aria-controls="${id}" aria-expanded="false" title="Chuyển cổng Narra">
-    <span class="workspace-icon">${icon(merchant ? 'storefront' : 'group')}</span>
-    <span class="workspace-copy"><strong>${workspaceName()}</strong><small>${merchant ? 'Quản trị chương trình' : 'Không gian đại sứ'}</small></span>${icon('expand_more')}
+    ${label}${icon('expand_more')}
   </button>
   <div class="popover workspace-popup" id="${id}" hidden>
     <div class="popover-title">Chuyển cổng làm việc</div>
@@ -179,7 +220,8 @@ function renderTopbar() {
       <div class="popover" id="account" hidden>
         <button type="button" data-action="profile">${icon('person')} Hồ sơ tài khoản</button>
         <a href="${route(role, 'support')}">${icon('support_agent')} Hỗ trợ</a>
-        <a href="${route(merchant ? 'affiliate' : 'merchant', 'overview')}">${icon('workspaces')}${merchant ? 'Sang cổng Đại sứ' : 'Sang Merchant Center'}</a>
+        ${portalSession ? `<button type="button" data-action="sign-out">${icon('logout')} Đăng xuất</button>`
+          : `<a href="${route(merchant ? 'affiliate' : 'merchant', 'overview')}">${icon('workspaces')}${merchant ? 'Sang cổng Đại sứ' : 'Sang Merchant Center'}</a>`}
       </div>
       <div class="popover notification-menu" id="notifications" hidden>
         <div class="popover-title">Thông báo</div>
@@ -195,6 +237,19 @@ function renderMain() {
   const current = ctx();
   main.innerHTML = pageViews[page](current);
   chartDisposer = page === 'overview' ? mountChart(buckets(current)) : () => {};
+  const access = main.querySelector('#portal-access');
+  if (access) void loadAccess(access);
+}
+
+async function loadAccess(target) {
+  try {
+    const [{ applications }, { resets }] = await Promise.all([
+      portalRequest('/api/admin/applications'), portalRequest('/api/admin/resets'),
+    ]);
+    if (target.isConnected) target.innerHTML = accessLists(applications, resets);
+  } catch (error) {
+    if (target.isConnected) target.innerHTML = `<section class="card"><p>${esc(error.message)}</p>${action('Tải lại', 'access-retry')}</section>`;
+  }
 }
 
 function render() {
@@ -216,18 +271,25 @@ function renderResults() {
 
 function parseRoute() {
   const [target, viewKey, sub] = window.location.hash.replace(/^#\/?/, '').split('/');
-  role = target === 'affiliate' ? 'affiliate' : 'merchant';
+  role = portalSession?.role ?? (target === 'affiliate' ? 'affiliate' : 'merchant');
   const valid = navigation().some(([key]) => key === viewKey) || viewKey === 'support' || (role === 'merchant' && viewKey === 'system');
   page = valid ? viewKey : 'overview';
   view = { tab: 'list', query: '', status: '', campaign: '', link: '' };
+  if (portalSession && target !== role) {
+    page = 'overview';
+    routeSignature = route(role, page);
+    history.replaceState(null, '', routeSignature);
+    return;
+  }
   if (sub === 'pending' && ['orders', 'partners'].includes(page)) view.status = 'pending';
   if (['batches', 'adjustments'].includes(sub) && page === 'payouts') view.tab = sub;
   if (sub === 'program' && page === 'campaigns' && role === 'merchant') view.tab = sub;
   if (sub === 'mechanism' && page === 'partners') view.tab = sub;
+  if (sub === 'access' && page === 'partners' && portalSession?.role === 'merchant') view.tab = sub;
 }
 
 function syncRoute() {
-  if (referralCode) return;
+  if (referralCode || (portalMode && !portalSession)) return;
   if (window.location.hash === '#main') {
     main.focus();
     return;
@@ -378,7 +440,8 @@ function toast(message, error = false) {
   const item = document.createElement('div');
   item.className = 'toast' + (error ? ' error' : '');
   item.innerHTML = icon(error ? 'info' : 'check_circle') + `<span>${esc(message)}</span>`;
-  toasts.replaceChildren(item);
+  const feedback = dialog.open && dialog.querySelector('.dialog-feedback');
+  (feedback || toasts).replaceChildren(item);
   setTimeout(() => item.remove(), 3300);
 }
 
@@ -386,6 +449,7 @@ function drawDialog(panel) {
   dialog.className = [panel.size, panel.presentation].filter(Boolean).join(' ');
   const body = `<header class="dialog-heading"><div><h2 id="dialog-title">${esc(panel.title)}</h2>${panel.subtitle ? `<p>${esc(panel.subtitle)}</p>` : ''}</div>
   ${buttonIcon('close-dialog', 'close', 'Đóng cửa sổ', 'dialog-close')}</header>
+  <div class="dialog-feedback" role="status" aria-live="polite" aria-atomic="true"></div>
   <div class="dialog-body">${panel.body}<p class="form-error" role="alert" hidden></p></div>
   ${panel.footer || panels.length > 1 ? `<footer class="dialog-footer">${panels.length > 1 ? action('Quay lại', 'back-dialog', { symbol: 'chevron_left' }) : ''}${panel.footer ?? ''}</footer>` : ''}`;
   dialog.innerHTML = panel.form ? `<form data-form="${panel.form}" data-id="${esc(panel.id ?? '')}">${body}</form>` : body;
@@ -447,13 +511,17 @@ function findData(list, id) {
   return chosen;
 }
 
-function update(message, summary, next = null) {
-  if (summary) record(data, summary);
-  const persisted = saveState(data);
+function refreshAfterUpdate(next) {
   closeDialog(false);
   render();
   if (next) showPanel(next());
   else main.focus({ preventScroll: true });
+}
+
+function update(message, summary, next = null) {
+  if (summary) record(data, summary);
+  const persisted = saveState(data);
+  refreshAfterUpdate(next);
   toast(persisted ? message : 'Trình duyệt chưa lưu được thay đổi.', !persisted);
 }
 
@@ -570,6 +638,53 @@ function viewTab(tab) {
   render();
 }
 
+async function runAccessAction(trigger, task) {
+  if (trigger.disabled) return;
+  trigger.disabled = true;
+  try { await task(); }
+  catch (error) { toast(error.message, true); }
+  finally { trigger.disabled = false; }
+}
+
+function handleAccess(trigger, name, id, value) {
+  if (portalSession?.role !== 'merchant') return;
+  const path = '/api/admin/applications/' + encodeURIComponent(id);
+  void runAccessAction(trigger, async () => {
+    if (name === 'access-application') {
+      const { application } = await portalRequest(path);
+      if (trigger.isConnected && page === 'partners' && view.tab === 'access') showPanel(applicationPanel(application));
+      return;
+    }
+    if (name === 'access-review') {
+      const group = dialog.querySelector('[name="application-group"]')?.value;
+      const { account } = await portalRequest(path, { decision: value, group });
+      if (account) rememberAccount(account);
+      if (trigger.isConnected) refreshAfterUpdate();
+      else if (page === 'partners') renderMain();
+      toast(value === 'approve' ? 'Đã duyệt hồ sơ và cấp mã đối tác.' : 'Đã từ chối hồ sơ.');
+      return;
+    }
+    const { path: resetPath } = await portalRequest('/api/admin/resets/' + encodeURIComponent(id), {});
+    if (trigger.isConnected && page === 'partners' && view.tab === 'access') {
+      renderMain();
+      showPanel(recoveryLinkPanel(new URL(resetPath, location.origin).href));
+    }
+  });
+}
+
+function editPartnerProfile(trigger, id) {
+  merchantOnly();
+  if (!findData('partners', id).portalAccount) {
+    showPanel(profilePanel(ctx(), id), true);
+    return;
+  }
+  void runAccessAction(trigger, async () => {
+    const { account } = await portalRequest('/api/partners/' + encodeURIComponent(id));
+    rememberAccount(account);
+    if (dialog.open && trigger.isConnected) showPanel(profilePanel(ctx(), id), true);
+  });
+}
+
 const simpleActions = {
   'open-sidebar': () => setDrawer(true),
   'close-sidebar': () => setDrawer(false),
@@ -618,7 +733,17 @@ document.addEventListener('click', event => {
       case 'edit-campaign': merchantOnly(); showPanel(campaignForm(current, findData('campaigns', id)), true); break;
       case 'new-policy': merchantOnly(); showPanel(policyForm(current)); break;
       case 'edit-mechanism': merchantOnly(); showPanel(mechanismForm(current)); break;
-      case 'edit-partner-profile': merchantOnly(); showPanel(profilePanel(current, id), true); break;
+      case 'edit-partner-profile': editPartnerProfile(trigger, id); break;
+      case 'sign-out':
+        if (portalSession) void runAccessAction(trigger, async () => {
+          await portalRequest('/api/auth/logout', {});
+          location.assign('/');
+        });
+        break;
+      case 'access-application': case 'access-review': case 'access-reset':
+        handleAccess(trigger, name, id, value);
+        break;
+      case 'access-retry': renderMain(); break;
       case 'confirm-policy':
         data.profile.confirmedPolicy = policyAt(data).id;
         update('Đã lưu xác nhận đọc chính sách.');
@@ -886,11 +1011,21 @@ async function savePartnerProfile(form, fields, photo) {
   const avatar = photo?.size ? await prepareAvatar(photo) : null;
   if (!dialog.open || !form.isConnected || admin !== (role === 'merchant')) return;
   const partner = findData('partners', id);
-  Object.assign(partner, profileFields(data.partners, partner, fields, admin));
-  if (avatar !== null) partner.avatar = avatar;
-  else if (fields.removeAvatar === 'on') partner.avatar = '';
-  update('Đã lưu thông tin hồ sơ.', admin ? `Cập nhật hồ sơ ${partner.name}.` : '',
-    admin ? () => detailPanel(ctx(), 'partner', id) : () => profilePanel(ctx()));
+  const edits = profileFields(data.partners, partner, fields, admin);
+  if (avatar !== null) edits.avatar = avatar;
+  else if (fields.removeAvatar === 'on') edits.avatar = '';
+  const success = 'Bạn đã lưu thông tin thành công';
+  const reopen = admin ? () => detailPanel(ctx(), 'partner', id) : () => profilePanel(ctx());
+  if (portalSession && partner.portalAccount) {
+    const { account } = await portalRequest('/api/partners/' + encodeURIComponent(id), edits);
+    rememberAccount(account);
+    if (dialog.open && form.isConnected) refreshAfterUpdate(reopen);
+    else render();
+    toast(success);
+    return;
+  }
+  Object.assign(partner, edits);
+  update(success, admin ? `Cập nhật hồ sơ ${partner.name}.` : '', reopen);
 }
 
 dialog.addEventListener('submit', event => {
@@ -904,6 +1039,7 @@ dialog.addEventListener('submit', event => {
   errorMessage.hidden = true;
   const reportError = error => { errorMessage.textContent = error.message; errorMessage.hidden = false; };
   if (form.dataset.form === 'profile') {
+    form.querySelector('.dialog-feedback').replaceChildren();
     form.dataset.saving = 'true';
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
@@ -972,7 +1108,7 @@ function drawReferral() {
     <div class="referral-actions">
       ${link ? `<button class="btn btn-secondary" data-action="simulate-lead" ${trial.lead ? 'disabled' : ''}>${trial.lead ? 'Đã ghi nhận đăng ký Free' : 'Mô phỏng đăng ký Free'}</button>
       <button class="btn btn-primary" data-action="simulate-plus" ${trial.plus ? 'disabled' : ''}>${trial.plus ? 'Đã ghi nhận giao dịch' : 'Mô phỏng giao dịch'}</button>` : ''}
-      <a class="btn btn-secondary" href="${location.pathname}${route('affiliate', 'overview')}">Về cổng Đại sứ</a>
+      <a class="btn btn-secondary" href="/portal${route('affiliate', 'overview')}">Về cổng Đại sứ</a>
     </div>
   </section>`;
 }
@@ -1020,8 +1156,8 @@ mobile.addEventListener('change', () => {
 });
 
 window.addEventListener('storage', event => {
-  if (event.key !== 'narra-affiliate-pilot-v1') return;
-  data = readState();
+  if (event.key !== 'narra-affiliate-pilot-v1' || (portalMode && !portalSession)) return;
+  data = workspaceData();
   if (referralCode) {
     const tracking = data.activity.find(e => e.track === clickEventKey);
     trial = { lead: tracking?.l0 > 0, plus: data.orders.some(o => o.track === clickEventKey) };
@@ -1029,9 +1165,20 @@ window.addEventListener('storage', event => {
   } else render();
 });
 window.addEventListener('hashchange', syncRoute);
+if (portalMode) window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
 
 document.documentElement.dataset.theme = theme;
-if (referralCode) startReferral();
+if (portalMode && !portalSession) {
+  if (sessionError) {
+    shell.hidden = true;
+    const area = document.createElement('main');
+    area.className = 'referral';
+    area.innerHTML = `<section class="card">${brandMark}<h1>Chưa thể mở cổng Narra</h1>
+      <p>${esc(sessionError)}</p><div class="referral-actions"><a class="btn btn-primary" href="/portal">Thử lại</a>
+      <a class="btn btn-secondary" href="/">Về trang đăng nhập</a></div></section>`;
+    document.body.prepend(area);
+  } else location.replace('/');
+} else if (referralCode) startReferral();
 else {
   routeSignature = window.location.hash;
   parseRoute();

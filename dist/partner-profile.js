@@ -24,9 +24,10 @@ export function profileFields(partners, current, fields, isAdmin) {
   };
 }
 
-export async function prepareAvatar(file) {
-  if (!avatarTypes.includes(file.type)) throw new Error('Chọn ảnh JPG, PNG hoặc WebP.');
-  if (file.size > 8 * 1024 * 1024) throw new Error('Chọn ảnh có dung lượng tối đa 8 MB.');
+export async function prepareAvatar(file, { maxBytes = 8 * 1024 * 1024, allowGif = false } = {}) {
+  const acceptable = allowGif ? [...avatarTypes, 'image/gif'] : avatarTypes;
+  if (!acceptable.includes(file.type)) throw new Error(allowGif ? 'Chọn ảnh JPG, PNG hoặc GIF.' : 'Chọn ảnh JPG, PNG hoặc WebP.');
+  if (file.size > maxBytes) throw new Error(allowGif ? 'Chọn ảnh có dung lượng tối đa 3,1 MB.' : 'Chọn ảnh có dung lượng tối đa 8 MB.');
   const url = URL.createObjectURL(file);
   try {
     const picture = new Image();

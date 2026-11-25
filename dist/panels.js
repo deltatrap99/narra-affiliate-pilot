@@ -214,7 +214,7 @@ function partnerDetail(ctx, partner) {
     ]), 'Chưa có kỳ chi trả', '')}`,
     footer: footer(cancel(),
       merchant ? btn('Chỉnh hồ sơ', 'edit-partner-profile', partner.id, 'primary', 'edit') : '',
-      merchant && partner.status === 'active' ? btn('Tạm ngưng', 'pause-partner', partner.id, 'secondary') : '',
+      merchant && !partner.portalAccount && partner.status === 'active' ? btn('Tạm ngưng', 'pause-partner', partner.id, 'secondary') : '',
       merchant && partner.status === 'pending' ? btn('Từ chối', 'reject-partner', partner.id, 'danger') : '',
       merchant && ['pending', 'paused'].includes(partner.status) ? btn(partner.status === 'pending' ? 'Duyệt hồ sơ' : 'Kích hoạt lại', 'approve-partner', partner.id, 'primary', 'check') : ''),
   };
@@ -439,6 +439,7 @@ export function profilePanel(ctx, id = '') {
   const partner = partnerFor(ctx, id || PARTNER_ID);
   if (!partner || !mayRead(ctx, partner.id)) return null;
   const partial = partner.bankLast4 && !partner.bankAccount ? `placeholder="Tài khoản kết thúc bằng ${esc(partner.bankLast4)}"` : '';
+  const required = partner.portalAccount ? 'required' : '';
   return {
     title: merchant ? 'Chỉnh hồ sơ đối tác' : 'Hồ sơ tài khoản',
     subtitle: `${partnerCode(partner)} · ${groupName(partner.group)}`,
@@ -449,8 +450,8 @@ export function profilePanel(ctx, id = '') {
     </div></div>` + fields(
       entry('Tên hiển thị', 'name', partner.name, 'text', 'required maxlength="60" autocomplete="name"'),
       entry('Mã đối tác', 'code', partnerCode(partner), 'text', merchant ? 'required maxlength="32"' : 'readonly'),
-      entry('Email', 'email', partner.email, 'email', 'maxlength="254" autocomplete="email"'),
-      entry('Số điện thoại', 'phone', partner.phone, 'tel', 'maxlength="22" autocomplete="tel"'),
+      entry('Email', 'email', partner.email, 'email', `maxlength="254" autocomplete="email" ${required}`),
+      entry('Số điện thoại', 'phone', partner.phone, 'tel', `maxlength="24" autocomplete="tel" ${required}`),
       entry('Ngân hàng nhận tiền', 'bank', partner.bank, 'text', 'maxlength="60" autocomplete="off"'),
       entry('Số tài khoản ngân hàng', 'bankAccount', partner.bankAccount, 'text', `inputmode="numeric" maxlength="30" autocomplete="off" ${partial}`),
     ) + (partner.verification ? note('Thông tin nhận tiền đang chờ xác minh.') : ''),

@@ -1,5 +1,5 @@
 import { campaignProgressFor } from './campaign-progress.js';
-import { mechanismSource, partnerPlans, planLabel, planEarnings } from './partner-mechanism.js';
+import { partnerPlans, planLabel, planEarnings } from './partner-mechanism.js';
 import { partnerCode } from './partner-profile.js';
 import {
   TODAY, GROUPS, PARTNER_ID, date, number, money, percent, addDays, numDays, includesDate, stats,
@@ -225,7 +225,6 @@ export function mechanismOverview(ctx) {
     </div>
     ${cardTitle('Thu nhập theo gói và kỳ', 'Mức hoa hồng tính trên số tiền thu một lần của từng gói.')}
     ${table(['Gói & kỳ', 'Thu một lần', 'Quy đổi/tháng', 'HH cơ bản', 'HH tăng trưởng', 'HH gia hạn'], amountRows)}
-    <div class="mechanism-source"><a class="text-link" href="${mechanismSource}" target="_blank" rel="noopener">Xem bảng cơ chế gốc</a></div>
   </section>`;
 }
 
@@ -315,7 +314,10 @@ export function partners(ctx) {
   const list = ctx.partners;
   const onRules = ctx.view.tab === 'mechanism';
   const heading = pageTitle('Đối tác', 'Duyệt hồ sơ, theo dõi hiệu quả giới thiệu và quản lý cơ chế hoa hồng.');
-  const nav = tabs([['list', 'Hồ sơ đối tác'], ['mechanism', 'Cơ chế đối tác']], onRules ? 'mechanism' : 'list');
+  const onAccess = ctx.portal?.role === 'merchant' && ctx.view.tab === 'access';
+  const nav = tabs([['list', 'Hồ sơ đối tác'], ['mechanism', 'Cơ chế đối tác'], ...(ctx.portal?.role === 'merchant' ? [['access', 'Hồ sơ xin mã']] : [])],
+    onAccess ? 'access' : onRules ? 'mechanism' : 'list');
+  if (onAccess) return heading + nav + '<div id="portal-access" aria-live="polite"><p>Đang tải hồ sơ…</p></div>';
   if (onRules) return heading + nav + mechanismOverview(ctx);
   return `${heading}${nav}
   ${filterBar(ctx)}
@@ -330,7 +332,7 @@ export function partners(ctx) {
   </div><div id="results">${partnerList(ctx)}</div></section>`;
 }
 
-export const linkURL = code => `${window.location.origin}${window.location.pathname}?ref=${encodeURIComponent(code)}`;
+export const linkURL = code => `${window.location.origin}/r?ref=${encodeURIComponent(code)}`;
 
 export function linkList(ctx) {
   const { data, ids, range, view } = ctx;
