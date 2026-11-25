@@ -1,6 +1,7 @@
 import { GROUPS, TODAY, date, number, money, percent } from './model.js';
 
 export const icon = (name, className = '') => `<span class="symbol ${className}" aria-hidden="true">${name}</span>`;
+export const brandMark = '<span class="brand-mark" aria-hidden="true"><img src="assets/narra-n.png" alt="" width="28" height="28"></span>';
 export const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 export const fold = value => String(value ?? '').toLocaleLowerCase('vi').replaceAll('đ', 'd').normalize('NFD').replace(/\p{M}/gu, '');
 export const matches = (query, ...values) => {

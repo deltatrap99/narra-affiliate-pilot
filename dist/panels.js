@@ -238,7 +238,7 @@ export function batchForm(ctx, id = '') {
       title: 'Ghi nhận chi trả', form: 'pay-batch', id, size: 'compact',
       body: fields(entry('Mã tham chiếu', 'ref', '', 'text', 'required maxlength="48"'),
         entry('Ngày chi', 'date', TODAY, 'date', `required max="${TODAY}" min="${ctx.data.batches.find(b => b.id === id)?.created}"`))
-        + note('Thao tác cập nhật bản ghi thanh toán trong demo.'),
+        + note('Xác nhận sẽ cập nhật trạng thái của kỳ đối soát.'),
       footer: footer(cancel(), submit('Xác nhận đã chi')),
     };
   }
@@ -345,7 +345,7 @@ export function profilePanel(ctx) {
   const p = ctx.data.profile;
   if (isMerchant(ctx)) return {
     title: 'Narra Admin', size: 'compact',
-    body: detailGrid([['Tài khoản demo', 'Merchant Center'], ['Vai trò', 'Quản trị chương trình'], ['Múi giờ', 'Việt Nam (GMT+7)']]),
+    body: detailGrid([['Cổng làm việc', 'Merchant Center'], ['Vai trò', 'Quản trị chương trình'], ['Múi giờ', 'Việt Nam (GMT+7)']]),
     footer: footer(cancel()),
   };
   return {
@@ -355,8 +355,7 @@ export function profilePanel(ctx) {
       entry('Email liên hệ', 'email', p.email, 'email', 'maxlength="80"'),
       entry('Ngân hàng nhận tiền', 'bank', p.bank, 'text', 'maxlength="60"'),
       entry('4 số cuối tài khoản', 'bankLast4', p.bankLast4, 'text', 'inputmode="numeric" pattern="[0-9]{4}" maxlength="4"'),
-    ) + (p.verification ? note(p.verification) : '')
-      + note('Ở bản demo, chỉ cần dùng thông tin mẫu để xem bước xác minh.'),
+    ) + (p.verification ? note('Thông tin nhận tiền đang chờ xác minh.') : ''),
     footer: footer(cancel(), submit('Lưu thông tin')),
   };
 }

@@ -3,7 +3,7 @@ import {
   readState, saveState, selectPartners, stats, policyAt, campaignStatus, inAudience, commission,
   orderStatus, eligiblePayoutEntries, decideOrder, refundOrder, newLink, record,
 } from './model.js';
-import { icon, esc, avatar, groupName, route, action, merchantNav, affiliateNav, statusText, sum } from './ui.js';
+import { icon, brandMark, esc, avatar, groupName, route, action, merchantNav, affiliateNav, statusText, sum } from './ui.js';
 import {
   overview, campaigns, partners, toolsPage, orders, payouts, policyPage, systemPage, supportPage,
   campaignList, partnerList, linkList, orderTable, listOrders, payoutList, buckets,
@@ -107,7 +107,7 @@ function workspacePicker(id) {
     <span class="workspace-copy"><strong>${workspaceName()}</strong><small>${merchant ? 'Quản trị chương trình' : 'Không gian đại sứ'}</small></span>${icon('expand_more')}
   </button>
   <div class="popover workspace-popup" id="${id}" hidden>
-    <div class="popover-title">Chuyển vai trò demo</div>
+    <div class="popover-title">Chuyển cổng làm việc</div>
     ${[['merchant', 'storefront', 'Quản trị chương trình'], ['affiliate', 'group', 'Dành cho Đại sứ']].map(([key, symbol, info]) =>
       `<a class="${role === key ? 'active-menu' : ''}" href="${route(key, 'overview')}">${icon(symbol)}<span><strong>${workspaceName(key)}</strong><small>${info}</small></span>${role === key ? icon('check') : ''}</a>`).join('')}
   </div>`;
@@ -117,7 +117,7 @@ function renderRail() {
   const suite = role === 'merchant';
   rail.innerHTML = `<div class="rail-content">
     <div class="rail-top">
-      <a class="brand" href="${route(role, 'overview')}" aria-label="Narra Affiliate, Tổng quan"><span class="brand-mark" aria-hidden="true">n.</span><span class="brand-name">Narra Affiliate</span></a>
+      <a class="brand" href="${route(role, 'overview')}" aria-label="Narra Affiliate, Tổng quan">${brandMark}<span class="brand-name">Narra Affiliate</span></a>
       ${buttonIcon('toggle-sidebar', 'left_panel_close', 'Thu gọn thanh điều hướng', 'rail-toggle')}
       ${buttonIcon('close-sidebar', 'close', 'Đóng thanh điều hướng', 'mobile-close')}
     </div>
@@ -127,7 +127,6 @@ function renderRail() {
     ${suite ? `<div class="rail-divider"></div><nav class="rail-nav" aria-label="Quản trị">${navLink(['system', 'Quản trị hệ thống', 'settings'])}</nav>` : ''}
     <div class="rail-bottom">
       ${navLink(['support', 'Hỗ trợ', 'support_agent'])}
-      <div class="rail-meta"><strong>Dữ liệu mô phỏng</strong><span>Pilot · Tháng 11/2026</span></div>
     </div>
   </div>
   <div class="rail-resize" id="rail-size" role="separator" aria-label="Chiều rộng thanh điều hướng" aria-controls="rail" aria-orientation="vertical" aria-valuemin="${minimumWidth}" aria-valuemax="${maximumWidth}" aria-valuenow="${sidebarWidth}" tabindex="0" title="Kéo để đổi chiều rộng"></div>`;
@@ -159,7 +158,7 @@ function renderTopbar() {
     <div class="breadcrumb" aria-label="Vị trí hiện tại">
       ${buttonIcon('open-sidebar', 'menu', 'Mở thanh điều hướng', 'mobile-open')}
       ${buttonIcon('toggle-sidebar', 'left_panel_open', 'Mở rộng thanh điều hướng', 'desktop-open')}
-      <a class="horizontal-brand" href="${route(role, 'overview')}" aria-label="Narra Affiliate, Tổng quan"><span class="brand-mark" aria-hidden="true">n.</span></a>
+      <a class="horizontal-brand" href="${route(role, 'overview')}" aria-label="Narra Affiliate, Tổng quan">${brandMark}</a>
       <div class="horizontal-switch">${workspacePicker('horizontal-workspaces')}</div>
       <a class="breadcrumb-home" href="${route(role, 'overview')}">${workspaceName()}</a>${icon('chevron_right', 'crumb-chevron')}<strong>${esc(name)}</strong>
     </div>
@@ -852,7 +851,7 @@ function submitForm(form, fields) {
       if (Boolean(fields.bank) !== Boolean(fields.bankLast4)) throw new Error('Nhập cả tên ngân hàng và 4 số cuối, hoặc xóa cả hai.');
       const changed = fields.bank !== data.profile.bank || fields.bankLast4 !== data.profile.bankLast4;
       Object.assign(data.profile, fields);
-      if (changed) data.profile.verification = fields.bank ? 'Thông tin nhận tiền đang chờ xác minh trong demo.' : '';
+      if (changed) data.profile.verification = fields.bank ? 'Thông tin nhận tiền đang chờ xác minh.' : '';
       update('Đã lưu thông tin hồ sơ.');
       break;
     }
@@ -907,8 +906,8 @@ function drawReferral() {
   shell.hidden = true;
   let area = document.querySelector('.referral');
   if (!area) { area = document.createElement('main'); area.className = 'referral'; document.body.prepend(area); }
-  area.innerHTML = `<section class="card"><span class="brand-mark" aria-hidden="true">n.</span>
-    <h1>Narra Speaking Coach</h1><p>${link ? `Bạn đang mở link ${esc(link.code)}. Có thể thử đăng ký và mua Plus để xem kết quả ghi nhận trong bản demo.` : 'Link giới thiệu này hiện không khả dụng.'}</p>
+  area.innerHTML = `<section class="card">${brandMark}
+    <h1>Narra Speaking Coach</h1><p>${link ? `Bạn đang mở link ${esc(link.code)}. Tại đây bạn có thể thử luồng đăng ký Free và mua Plus.` : 'Link giới thiệu này hiện không khả dụng.'}</p>
     <div class="referral-actions">
       ${link ? `<button class="btn btn-secondary" data-action="simulate-lead" ${trial.lead ? 'disabled' : ''}>${trial.lead ? 'Đã ghi nhận đăng ký Free' : 'Mô phỏng đăng ký Free'}</button>
       <button class="btn btn-primary" data-action="simulate-plus" ${trial.plus ? 'disabled' : ''}>${trial.plus ? 'Đã ghi nhận đơn Plus' : 'Mô phỏng mua Plus'}</button>` : ''}

@@ -40,11 +40,23 @@ function overviewTitle(ctx) {
     ? action('Tạo chiến dịch', 'new-campaign', { symbol: 'add', type: 'primary' })
     : `<a class="btn btn-primary" href="${route(ctx.role, 'tools')}">${icon('link')} Lấy link giới thiệu</a>`;
   return pageTitle(
-    merchant ? 'Tổng quan chương trình' : `Chào ${firstName(ctx.data.profile.name)}!`,
+    merchant ? 'Tổng quan chương trình' : 'Tổng quan giới thiệu',
     merchant ? 'Theo dõi hiệu quả giới thiệu, doanh thu và các giao dịch cần xử lý.'
       : 'Theo dõi kết quả giới thiệu và hoa hồng trong kỳ bạn chọn.',
     report + primary,
   );
+}
+
+function narriWelcome(ctx) {
+  const merchant = roleMerchant(ctx);
+  const greeting = merchant ? 'Chào bạn, Narri đây!' : `Chào ${firstName(ctx.data.profile.name)}, Narri đây!`;
+  const encouragement = merchant
+    ? 'Nếu hôm nay có nhiều việc, cứ bắt đầu với những đơn cần xác minh rồi quay lại xem chương trình đang tiến triển thế nào nhé.'
+    : 'Mỗi lời giới thiệu đều có thể giúp thêm một người tìm được cách luyện nói phù hợp. Hôm nay, bạn thử bắt đầu với một người bạn đang muốn luyện tiếng Anh nhé.';
+  return `<section class="narri-welcome" aria-labelledby="narri-greeting">
+    <div class="narri-figure"><img src="assets/narri-welcome.webp" width="112" height="102" alt=""></div>
+    <div class="narri-message"><h2 id="narri-greeting">${esc(greeting)}</h2><p>${encouragement}</p></div>
+  </section>`;
 }
 
 function overviewMetrics(current, previous) {
@@ -177,7 +189,7 @@ export function overview(ctx) {
   const current = stats(data, ids, range);
   const days = numDays(range.start, range.end);
   const previous = stats(data, ids, { start: addDays(range.start, -days), end: addDays(range.start, -1) });
-  return `${overviewTitle(ctx)}${filterBar(ctx)}
+  return `${overviewTitle(ctx)}${narriWelcome(ctx)}${filterBar(ctx)}
   <div class="report-grid">${overviewMetrics(current, previous)}${trend(ctx, current)}</div>
   ${roleMerchant(ctx)
     ? `<div class="dashboard-grid">${ranking(ctx)}${taskPanel(ctx)}</div>`
@@ -202,13 +214,13 @@ function policyOverview(ctx) {
     ['Thời gian giữ', `${number(current.hold)} ngày sau khi duyệt đơn`],
     ['Ngưỡng và lịch chi trả', `${money(current.threshold)} · ${current.cadence}`],
     ['Hoàn tiền', 'Hoa hồng được điều chỉnh theo khoản hoàn, kể cả sau khi đã chi.'],
-    ['Gia hạn', 'Hoa hồng trong bản demo áp dụng cho lần mua đầu tiên.'],
+    ['Gia hạn', 'Hoa hồng chỉ áp dụng cho lần mua đầu tiên đủ điều kiện.'],
   ];
   return `<section class="card policy-card">${cardTitle(`Chính sách ${current.id}`, 'Áp dụng theo phiên bản có hiệu lực tại ngày thanh toán.',
     badge(current.enabled ? 'active' : 'paused'))}
     <dl class="details-grid">${details.map(([key, value]) => `<div><dt>${esc(key)}</dt><dd>${esc(value)}</dd></div>`).join('')}</dl>
     <div class="card-footer">
-      ${note('Các tỷ lệ và ngưỡng này dùng để minh họa quy trình pilot.')}
+      ${note('Các mức tỷ lệ và ngưỡng ở đây dùng để tham khảo khi thiết lập chính sách.')}
       ${merchant ? action('Tạo phiên bản', 'new-policy', { symbol: 'edit', type: 'primary' }) :
         ctx.data.profile.confirmedPolicy === current.id ? badge('approved', 'Bạn đã xác nhận') : action('Xác nhận đã đọc', 'confirm-policy', { symbol: 'check', type: 'primary' })}
     </div>
@@ -436,7 +448,7 @@ export function supportPage(ctx) {
   const list = ctx.data.tickets.filter(t => merchant || t.partner === PARTNER_ID);
   return `${pageTitle('Hỗ trợ', 'Theo dõi yêu cầu liên quan đến quyền lợi, đơn hàng và chi trả.',
     action('Gửi yêu cầu', 'new-ticket', { type: 'primary', symbol: 'add' }))}
-    <section class="card">${cardTitle('Yêu cầu hỗ trợ', 'Các yêu cầu tạo trong bản demo được lưu trên thiết bị này.')}
+    <section class="card">${cardTitle('Yêu cầu hỗ trợ', 'Yêu cầu hỗ trợ được lưu trên thiết bị này.')}
     ${table(['Mã yêu cầu', 'Nội dung', 'Ngày gửi', 'Trạng thái'], list.map(t => [
       esc(t.id), `<span class="long-cell">${esc(t.body)}</span>`, date(t.at), badge('open'),
     ]), 'Chưa có yêu cầu hỗ trợ', 'Khi cần làm rõ một giao dịch, bạn có thể gửi mã đơn để đội vận hành đối chiếu.', 'support_agent')}</section>`;
@@ -446,11 +458,11 @@ export function systemPage(ctx) {
   const tab = ctx.view.tab;
   const items = [['list', 'Nhật ký'], ['team', 'Đội ngũ'], ['email', 'Email'], ['api', 'API']];
   const content = tab === 'team'
-    ? table(['Thành viên', 'Vai trò', 'Quyền trong demo'], [[personCell({ name: 'Narra Admin', group: '', id: 'Merchant Center', tone: 'violet' }, false), 'Quản trị chương trình', 'Quản lý chiến dịch, đối tác, đơn hàng và đối soát']])
+    ? table(['Thành viên', 'Vai trò', 'Quyền truy cập'], [[personCell({ name: 'Narra Admin', group: '', id: 'Merchant Center', tone: 'violet' }, false), 'Quản trị chương trình', 'Quản lý chiến dịch, đối tác, đơn hàng và đối soát']])
     : tab === 'email'
       ? note('Các cập nhật chiến dịch xuất hiện trong mục thông báo. Gửi email sẽ cần cấu hình kênh của chương trình.', 'email')
       : tab === 'api'
-        ? note('Bản demo dùng dữ liệu mô phỏng. Kết nối API REFLO và sự kiện Narra sẽ được cấu hình trong môi trường vận hành.', 'lock')
+        ? note('API REFLO và luồng sự kiện Narra chưa được kết nối.', 'lock')
         : table(['Ngày', 'Hoạt động'], ctx.data.audit.map(e => [date(e.at), esc(e.text)]), 'Chưa có hoạt động vận hành', 'Các thay đổi về chiến dịch, hồ sơ, đơn hàng và kỳ chi trả sẽ xuất hiện tại đây.');
   return `${pageTitle('Quản trị hệ thống', 'Theo dõi thay đổi và các công cụ vận hành chung của chương trình.')}
     ${tabs(items, tab)}<section class="card system-card">${cardTitle(items.find(([key]) => key === tab)?.[1] ?? 'Nhật ký')}${content}</section>`;
