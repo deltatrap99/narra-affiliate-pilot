@@ -483,7 +483,7 @@ export function supportPage(ctx) {
     <section class="card">${cardTitle('Yêu cầu hỗ trợ', 'Yêu cầu hỗ trợ được lưu trên thiết bị này.')}
     ${table(['Mã yêu cầu', 'Nội dung', 'Ngày gửi', 'Trạng thái'], list.map(t => [
       esc(t.id), `<span class="long-cell">${esc(t.body)}</span>`, date(t.at), badge('open'),
-    ]), 'Chưa có yêu cầu hỗ trợ', 'Khi cần làm rõ một giao dịch, bạn có thể gửi mã đơn để đội vận hành đối chiếu.', 'support_agent')}</section>`;
+    ]), 'Chưa có yêu cầu hỗ trợ', 'Khi cần làm rõ một giao dịch, bạn có thể gửi mã đơn để đội vận hành đối chiếu.')}</section>`;
 }
 
 export function systemPage(ctx) {
