@@ -1,5 +1,6 @@
 import { PortalError, bad, forbidden, now, json, inputJson, seal, unseal, digest,
-  equalDigest, requireIdentity } from './security.js';
+  equalDigest, requireIdentity, randomToken, hashPassword, changed } from './security.js';
+import { codeField, passwordField } from './fields.js';
 import { vercelConnection, vercelCallback, relayHeader, hostSessionSeconds } from './hosting.js';
 
 const hex = /^[a-f\d]{64}$/;
@@ -52,14 +53,34 @@ export async function connectVercel(request, env, url, servePortal) {
 
   // Service calls clear the visitor headers at Sites; only a Sites-issued grant establishes identity here.
   if (request.headers.has('oai-authenticated-user-id')) throw forbidden();
+  if (path === '/admin/setup' && request.method === 'POST') {
+    const [expires, expected] = (env.PORTAL_ADMIN_SETUP ?? '').split(':');
+    if (!hex.test(expected ?? '') || Number(expires) <= now() || !Number.isFinite(Number(expires))) {
+      throw new PortalError(404, 'Không tìm thấy chức năng này.');
+    }
+    const token = request.headers.get('x-narra-setup') ?? '';
+    if (!hex.test(token) || !equalDigest(await digest(token), expected)) throw forbidden();
+    const fields = await inputJson(request);
+    const code = codeField(fields);
+    const password = passwordField(fields, false);
+    const salt = randomToken(16);
+    const hashed = await hashPassword(env, password, salt);
+    const result = await env.DB.prepare(`INSERT INTO portal_owner (slot, identity, admin_code, admin_salt, admin_hash)
+      VALUES (1, ?, ?, ?, ?) ON CONFLICT(slot) DO UPDATE
+      SET admin_code = excluded.admin_code, admin_salt = excluded.admin_salt, admin_hash = excluded.admin_hash
+      WHERE portal_owner.admin_hash IS NULL`).bind('admin:' + crypto.randomUUID(), code, salt, hashed).run();
+    if (!changed(result)) throw new PortalError(409, 'Tài khoản quản trị đã được thiết lập.');
+    return json({ configured: true, code }, 201);
+  }
   if (path.startsWith('/partner/')) {
     const visitor = request.headers.get('x-narra-visitor') ?? '';
     const rateKey = request.headers.get('x-narra-rate-key') ?? '';
     if (!hex.test(visitor) || !hex.test(rateKey)) throw forbidden();
     const targetPath = path.slice('/partner'.length);
-    const allowed = new Set(['/portal', '/api/session', '/api/auth/login', '/api/auth/logout',
+    const allowed = new Set(['/portal', '/api/session', '/api/auth/login', '/api/auth/logout', '/api/auth/merchant',
       '/api/auth/apply', '/api/auth/recover', '/api/auth/reset']);
-    if (!allowed.has(targetPath) && !/^\/api\/partners\/PT-[a-f\d-]+$/.test(targetPath)) throw forbidden();
+    if (!allowed.has(targetPath) && !/^\/api\/partners\/PT-[a-f\d-]+$/.test(targetPath) &&
+      !/^\/api\/admin\/(?:applications|resets)(?:\/[a-z\d-]+)?$/i.test(targetPath)) throw forbidden();
     const target = new URL(targetPath + url.search, origin);
     const headers = new Headers(request.headers);
     headers.set('oai-authenticated-user-id', 'vercel-partner:' + visitor);

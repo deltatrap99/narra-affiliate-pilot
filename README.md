@@ -8,7 +8,7 @@ Chạy `npm ci` và `npm run build:vercel` để chuẩn bị bản Vercel. `npm
 
 ## Triển khai
 
-Vercel phục vụ giao diện từ mã nguồn này và gọi Worker của Sites để dùng chung tài khoản và hồ sơ đối tác trong D1. Đối tác đăng nhập trực tiếp bằng mã và mật khẩu. Merchant Center xác thực chủ Site trước khi cấp quyền quản trị.
+Vercel phục vụ giao diện từ mã nguồn này và gọi Worker của Sites để dùng chung tài khoản và hồ sơ đối tác trong D1. Đối tác và Quản trị viên đăng nhập trực tiếp bằng tài khoản và mật khẩu riêng.
 
 - Sites cần `NARRA_VERCEL_ORIGIN` trỏ tới tên miền Vercel chính thức. Cấu hình `PORTAL_KEY` và `PORTAL_OWNER_EMAIL` đặt trong runtime của Sites.
 - Project Vercel cần `NARRA_VERCEL_ORIGIN`, `NARRA_SITES_SERVICE_TOKEN` và `NARRA_VERCEL_SESSION_KEY` trong môi trường Production. Khóa phiên là chuỗi hex ngẫu nhiên 64 ký tự. Đặt token dịch vụ và khóa phiên ở dạng Sensitive.

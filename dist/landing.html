@@ -54,8 +54,10 @@
         <a href="#/" class="entry-link entry-back">Về đăng nhập đối tác</a>
         <div class="entry-icon"><span class="symbol" aria-hidden="true">storefront</span></div>
         <h2 tabindex="-1">Merchant Center</h2>
-        <p>Tiếp tục bằng tài khoản đang có quyền quản trị cổng Narra.</p>
+        <p>Đăng nhập bằng tài khoản quản trị Narra của bạn.</p>
         <form data-access-form="merchant">
+          <label class="field"><span>Tài khoản quản trị</span><input name="code" autocomplete="username" maxlength="32" spellcheck="false" required></label>
+          <label class="field"><span>Mật khẩu</span><span class="password-input"><input name="password" id="merchant-password" type="password" autocomplete="current-password" maxlength="128" required><button type="button" class="password-toggle" data-password="merchant-password" aria-pressed="false">Hiện</button></span></label>
           <p role="alert" class="entry-error" hidden></p>
           <button type="submit" class="btn btn-primary entry-submit">Đăng nhập Quản trị viên</button>
         </form>

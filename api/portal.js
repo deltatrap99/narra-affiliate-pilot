@@ -122,9 +122,6 @@ async function finishAccess(req, res, url, config) {
 }
 
 async function forwardPortal(req, res, url, access, config, method = req.method) {
-  if (!access?.session && url.pathname.startsWith('/api/admin/')) {
-    return json(res, 403, { error: 'Thao tác này dành cho Quản trị viên.' });
-  }
   const headers = {};
   let visitorCookieValue;
   if (access?.session) headers['x-narra-session'] = access.session;
@@ -205,9 +202,6 @@ export default async function portal(req, res) {
     const access = readSigned(cookieFrom(req, accessCookie), config.key);
     if (url.pathname === '/auth/sites/start' && method === 'GET') {
       return startAccess(res, new URL('/', origin), config.key);
-    }
-    if (url.pathname === '/api/auth/merchant' && method === 'POST' && !access?.session) {
-      return json(res, 200, { redirect: '/auth/sites/start' });
     }
     if (url.pathname.startsWith('/api/') && ['GET', 'POST'].includes(method)) {
       return await forwardPortal(req, res, url, access, config);

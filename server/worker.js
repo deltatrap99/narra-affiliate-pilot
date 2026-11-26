@@ -65,7 +65,18 @@ async function login(env, request, input) {
   return json({ role: 'affiliate' }, 200, { 'set-cookie': await issueSession(env, request, 'affiliate', row) });
 }
 
-async function merchantLogin(env, request) {
+async function merchantLogin(env, request, input) {
+  if (Object.hasOwn(input, 'code') || requireIdentity(request).startsWith('vercel-partner:')) {
+    await throttle(env, request, 'merchant-login', 8);
+    const code = codeField(input);
+    const password = passwordField(input, false);
+    const owner = await env.DB.prepare('SELECT admin_code, admin_salt, admin_hash FROM portal_owner WHERE slot = 1').first();
+    const verified = await hashPassword(env, password, owner?.admin_salt ?? '00000000000000000000000000000000');
+    if (!owner?.admin_hash || !equalDigest(verified, owner.admin_hash) || code !== owner.admin_code) {
+      throw new PortalError(401, 'Tài khoản quản trị hoặc mật khẩu chưa đúng.');
+    }
+    return json({ role: 'merchant' }, 200, { 'set-cookie': await issueSession(env, request, 'merchant') });
+  }
   const identity = requireIdentity(request);
   const email = request.headers.get('oai-authenticated-user-email')?.toLowerCase();
   if (email && email === env.PORTAL_OWNER_EMAIL?.toLowerCase()) {
@@ -185,7 +196,7 @@ async function api(env, request, path) {
   if (method === 'POST') {
     if (path === '/api/auth/apply') return apply(env, request, input);
     if (path === '/api/auth/login') return login(env, request, input);
-    if (path === '/api/auth/merchant') return merchantLogin(env, request);
+    if (path === '/api/auth/merchant') return merchantLogin(env, request, input);
     if (path === '/api/auth/recover') return recover(env, request, input);
     if (path === '/api/auth/reset') return reset(env, request, input);
     if (path === '/api/auth/logout') {
