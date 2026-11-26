@@ -27,7 +27,6 @@ export function applicationPanel(record) {
     ['Mã đối tác', code], ['Email', record.email], ['Số điện thoại chính', record.phone], ['Số điện thoại khác', record.phone2],
     ['Giới tính', record.gender], ['Ngày sinh', record.birth], ['Số CMT/CCCD', record.nationalId],
     ['Tỉnh/thành phố', record.province], ['Nghề nghiệp', record.occupation], ['Mã đại sứ giới thiệu', record.referrer],
-    ['Đại sứ cấp trên', record.supervisor === 'yes' ? record.supervisorCode : 'Không'],
     ['Đồng ý điều khoản', record.consentAt ? requestDate(Date.parse(record.consentAt) / 1000) : 'Chưa có'],
   ];
   return {

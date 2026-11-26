@@ -41,14 +41,6 @@ function success(title, message, code = '') {
   document.querySelector('#entry').scrollIntoView({ block: 'nearest' });
 }
 
-const supervisor = form.elements.supervisor;
-supervisor.addEventListener('change', () => {
-  const enabled = supervisor.value === 'yes';
-  document.querySelector('#supervisor-field').hidden = !enabled;
-  form.elements.supervisorCode.required = enabled;
-  form.elements.supervisorCode.disabled = !enabled;
-});
-
 const photo = form.elements.photo;
 function clearPhoto() {
   if (avatarUrl) URL.revokeObjectURL(avatarUrl);
@@ -110,7 +102,6 @@ document.addEventListener('submit', async event => {
       location.assign('/portal#/' + response.role + '/overview');
     } else if (flow === 'apply') {
       clearPhoto();
-      supervisor.dispatchEvent(new Event('change'));
       success('Đã gửi yêu cầu cấp mã', 'Lưu mã bên dưới. Sau khi hồ sơ được duyệt, bạn dùng mã này cùng mật khẩu đã tạo để đăng nhập.', response.code);
     } else if (flow === 'recover') {
       success('Đã tiếp nhận yêu cầu', 'Khi mã đối tác và email khớp với hồ sơ, Quản trị viên có thể cấp link đặt lại mật khẩu cho bạn.');

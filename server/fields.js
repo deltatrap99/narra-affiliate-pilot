@@ -48,13 +48,11 @@ export function applicationFields(data) {
   const nationalId = field(data, 'nationalId', 'số CMT/CCCD', 16, true).replace(/\s/g, '');
   if (!/^(?:\d{9}|\d{12})$/.test(nationalId)) throw bad('Số CMT/CCCD cần có 9 hoặc 12 chữ số.');
   const gender = field(data, 'gender', 'giới tính', 32, true);
-  const supervisor = field(data, 'supervisor', 'thông tin đại sứ cấp trên', 5, true);
-  if (!['Nam', 'Nữ', 'Khác', 'Không muốn cung cấp'].includes(gender) || !['yes', 'no'].includes(supervisor)) throw bad('Kiểm tra lại thông tin hồ sơ.');
+  if (!['Nam', 'Nữ', 'Khác', 'Không muốn cung cấp'].includes(gender)) throw bad('Kiểm tra lại thông tin hồ sơ.');
   const referrer = field(data, 'referrer', 'mã đại sứ giới thiệu', 32);
-  const supervisorCode = supervisor === 'yes' ? field(data, 'supervisorCode', 'mã đại sứ cấp trên', 32, true) : '';
   return {
     name: surname + ' ' + givenName, email: emailField(data), phone: phoneField(data, 'phone', true),
-    phone2: phoneField(data, 'phone2'), gender, birth, nationalId, referrer, supervisor, supervisorCode,
+    phone2: phoneField(data, 'phone2'), gender, birth, nationalId, referrer,
     province: field(data, 'province', 'tỉnh/thành phố', 70, true),
     occupation: field(data, 'occupation', 'nghề nghiệp', 80),
     avatar: avatarField(data), group: 'DSGD', termsUrl: TERMS_URL, consentAt: new Date().toISOString(),
