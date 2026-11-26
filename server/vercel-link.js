@@ -58,8 +58,9 @@ export async function connectVercel(request, env, url, servePortal) {
     if (!hex.test(visitor) || !hex.test(rateKey)) throw forbidden();
     const targetPath = path.slice('/partner'.length);
     const allowed = new Set(['/portal', '/api/session', '/api/auth/login', '/api/auth/logout',
-      '/api/auth/apply', '/api/auth/recover', '/api/auth/reset']);
-    if (!allowed.has(targetPath) && !/^\/api\/partners\/PT-[a-f\d-]+$/.test(targetPath)) throw forbidden();
+      '/api/auth/apply', '/api/auth/recover', '/api/auth/reset', '/api/campaigns']);
+    if (!allowed.has(targetPath) && !/^\/api\/partners\/PT-[a-f\d-]+$/.test(targetPath) &&
+      !/^\/api\/campaigns\/[A-Z0-9][A-Z0-9_-]{1,31}\/join$/.test(targetPath)) throw forbidden();
     const target = new URL(targetPath + url.search, origin);
     const headers = new Headers(request.headers);
     headers.set('oai-authenticated-user-id', 'vercel-partner:' + visitor);

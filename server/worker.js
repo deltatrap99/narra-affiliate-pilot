@@ -6,6 +6,7 @@ import {
 import { applicationFields, codeField, emailField, passwordField, editableFields } from './fields.js';
 import { vercelConnection } from './hosting.js';
 import { connectVercel } from './vercel-link.js';
+import { campaignList, saveCampaign, joinCampaign, approveMember } from './campaigns.js';
 
 const groups = new Set(['DSGD', 'DSSV']);
 const selectAccount = (env, id) => env.DB.prepare('SELECT * FROM portal_accounts WHERE id = ?').bind(id).first();
@@ -204,7 +205,15 @@ async function api(env, request, path) {
       if (method === 'GET' && !id) return resetList(env);
       if (method === 'POST' && id) return issueReset(env, id);
     }
+    if (section === 'campaigns' && method === 'POST') {
+      const [, , , , , sub] = path.split('/');
+      if (!id) return saveCampaign(env, input);
+      if (sub === 'members') return approveMember(env, id, input?.account);
+    }
   }
+  if (path === '/api/campaigns' && method === 'GET') return campaignList(env, await requireSession(env, request));
+  const joining = /^\/api\/campaigns\/([A-Z0-9][A-Z0-9_-]{1,31})\/join$/.exec(path);
+  if (joining && method === 'POST') return joinCampaign(env, await requireSession(env, request), joining[1]);
   const profile = /^\/api\/partners\/(PT-[a-f\d-]+)$/.exec(path);
   if (profile && ['GET', 'POST'].includes(method)) return partnerProfile(env, profile[1], await requireSession(env, request), input);
   return json({ error: 'Không tìm thấy chức năng này.' }, 404);

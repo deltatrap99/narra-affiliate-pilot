@@ -46,6 +46,12 @@ if (portalMode) {
 }
 selectAffiliate(portalSession?.account?.id);
 
+let serverCampaigns = [];
+if (portalSession) {
+  try { ({ campaigns: serverCampaigns } = await portalRequest('/api/campaigns')); }
+  catch {}
+}
+
 function mergeAccount(state, account) {
   const found = state.partners.find(person => person.id === account.id);
   const profile = {
@@ -59,6 +65,11 @@ function workspaceData() {
   const state = readState();
   if (portalSession?.role === 'merchant') portalSession.partners.forEach(account => mergeAccount(state, account));
   else if (portalSession?.account) mergeAccount(state, portalSession.account);
+  for (const campaign of serverCampaigns) {
+    const found = state.campaigns.find(c => c.id === campaign.id);
+    if (found) Object.assign(found, campaign, { members: { ...found.members, ...campaign.members } });
+    else state.campaigns.unshift({ ...campaign, members: { ...campaign.members } });
+  }
   return state;
 }
 
@@ -525,6 +536,21 @@ function update(message, summary, next = null) {
   toast(persisted ? message : 'Trình duyệt chưa lưu được thay đổi.', !persisted);
 }
 
+// Campaigns created in Merchant Center are stored on the server so every ambassador sees them.
+function serverFailure(error) {
+  toast('Chưa lưu được lên máy chủ: ' + error.message, true);
+}
+let serverQueue = Promise.resolve();
+function sendToServer(path, body) {
+  // Keep writes in order so a publish never lands before the draft it follows.
+  serverQueue = serverQueue.then(() => portalRequest(path, body)).catch(serverFailure);
+}
+function syncCampaign(campaign) {
+  if (role !== 'merchant' || !portalSession) return;
+  const { members, ...fields } = campaign;
+  sendToServer('/api/admin/campaigns', fields);
+}
+
 function handleCampaign(trigger) {
   const id = trigger.dataset.id;
   const campaign = findData('campaigns', id);
@@ -537,6 +563,9 @@ function handleCampaign(trigger) {
     }
     const pending = campaign.mode === 'approval';
     campaign.members[person.id] = pending ? 'pending' : 'joined';
+    if (portalSession?.role === 'affiliate') {
+      sendToServer('/api/campaigns/' + encodeURIComponent(id) + '/join', {});
+    }
     update(pending ? 'Đã gửi đăng ký để Merchant xem xét.' : 'Bạn đã tham gia chiến dịch.', `${person.name} đăng ký ${campaign.name}.`,
       () => detailPanel(ctx(), 'campaign', id));
     return;
@@ -548,11 +577,15 @@ function handleCampaign(trigger) {
       throw new Error('Hồ sơ này chưa đủ điều kiện tham gia.');
     }
     campaign.members[affiliate.id] = 'joined';
+    if (portalSession && affiliate.id.startsWith('PT-')) {
+      sendToServer('/api/admin/campaigns/' + encodeURIComponent(id) + '/members', { account: affiliate.id });
+    }
     update('Đã duyệt đăng ký.', `${affiliate.name} được duyệt tham gia ${campaign.name}.`, () => detailPanel(ctx(), 'campaign', id));
     return;
   }
   if (name === 'pause-campaign') {
     campaign.state = 'paused';
+    syncCampaign(campaign);
     update('Đã tạm dừng chiến dịch.', `Tạm dừng ${campaign.name}.`, () => detailPanel(ctx(), 'campaign', id));
     return;
   }
@@ -562,6 +595,7 @@ function handleCampaign(trigger) {
   if (campaign.mode === 'auto') {
     for (const partner of data.partners.filter(p => p.status === 'active' && inAudience(campaign, p))) campaign.members[partner.id] = 'joined';
   }
+  syncCampaign(campaign);
   update('Đã công bố chiến dịch cho nhóm đủ điều kiện.', `Công bố ${campaign.name}.`, () => detailPanel(ctx(), 'campaign', id));
 }
 
@@ -880,6 +914,7 @@ function saveCampaign(fields, id) {
   };
   if (existing) Object.assign(existing, details);
   else data.campaigns.unshift(details);
+  syncCampaign(existing || details);
   update('Đã lưu bản nháp chiến dịch.', `Lưu bản nháp ${details.name}.`, () => detailPanel(ctx(), 'campaign', code));
 }
 
@@ -985,6 +1020,7 @@ function submitForm(form, fields) {
       const campaign = findData('campaigns', id);
       campaign.goals = readCampaignGoals(fields);
       campaign.target = campaign.goals.orders;
+      syncCampaign(campaign);
       update('Đã lưu mốc thi đua.', `Cập nhật mốc thi đua của ${campaign.name}.`, () => detailPanel(ctx(), 'campaign', id));
       break;
     }
