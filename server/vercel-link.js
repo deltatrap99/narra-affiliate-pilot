@@ -52,6 +52,26 @@ export async function connectVercel(request, env, url, servePortal) {
 
   // Service calls clear the visitor headers at Sites; only a Sites-issued grant establishes identity here.
   if (request.headers.has('oai-authenticated-user-id')) throw forbidden();
+  if (path.startsWith('/partner/')) {
+    const visitor = request.headers.get('x-narra-visitor') ?? '';
+    const rateKey = request.headers.get('x-narra-rate-key') ?? '';
+    if (!hex.test(visitor) || !hex.test(rateKey)) throw forbidden();
+    const targetPath = path.slice('/partner'.length);
+    const allowed = new Set(['/portal', '/api/session', '/api/auth/login', '/api/auth/logout',
+      '/api/auth/apply', '/api/auth/recover', '/api/auth/reset']);
+    if (!allowed.has(targetPath) && !/^\/api\/partners\/PT-[a-f\d-]+$/.test(targetPath)) throw forbidden();
+    const target = new URL(targetPath + url.search, origin);
+    const headers = new Headers(request.headers);
+    headers.set('oai-authenticated-user-id', 'vercel-partner:' + visitor);
+    headers.delete('oai-authenticated-user-email');
+    headers.set('x-narra-rate-key', 'vercel:' + rateKey);
+    const response = await servePortal(new Request(target, {
+      method: request.method, headers, body: request.body, duplex: 'half',
+    }), env);
+    const outgoing = new Headers(response.headers);
+    outgoing.set(relayHeader, 'verified');
+    return new Response(response.body, { status: response.status, headers: outgoing });
+  }
   if (path === '/exchange' && request.method === 'POST') return exchange(request, env, origin);
   if (!path.startsWith('/relay/')) throw new PortalError(404, 'Không tìm thấy chức năng này.');
   const targetPath = path.slice('/relay'.length);

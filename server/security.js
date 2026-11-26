@@ -161,7 +161,9 @@ export async function issueSession(env, request, role, account = null) {
 }
 
 export async function throttle(env, request, action, max) {
-  const bucket = action + ':' + await digest(requireIdentity(request));
+  const identity = requireIdentity(request);
+  const rateKey = identity.startsWith('vercel-partner:') ? request.headers.get('x-narra-rate-key') : '';
+  const bucket = action + ':' + await digest(rateKey || identity);
   const window = Math.floor(now() / 600);
   const row = await env.DB.prepare(`INSERT INTO portal_limits (bucket, window, count) VALUES (?, ?, 1)
     ON CONFLICT(bucket) DO UPDATE SET count = CASE WHEN portal_limits.window = excluded.window THEN portal_limits.count + 1 ELSE 1 END,

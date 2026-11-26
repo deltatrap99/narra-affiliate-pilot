@@ -99,6 +99,11 @@ document.addEventListener('submit', async event => {
       if (input.password !== input.confirmPassword) throw new Error('Hai mật khẩu chưa khớp.');
     }
     const response = await portalRequest('/api/auth/' + flow, input);
+    if (response.redirect === '/auth/sites/start' && flow === 'merchant') {
+      leaving = true;
+      location.assign(response.redirect);
+      return;
+    }
     current.reset();
     if (flow === 'merchant' || flow === 'login') {
       leaving = true;

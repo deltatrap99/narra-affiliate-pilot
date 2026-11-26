@@ -5,6 +5,7 @@ import { sitesOrigin, vercelConnection, vercelCallback, relayHeader, hostSession
 const accessCookie = '__Host-narra_sites_access';
 const flowCookie = '__Host-narra_sites_flow';
 const portalCookie = '__Host-narra_portal';
+const visitorCookie = '__Host-narra_visitor';
 const browserPages = new Set(['/', '/portal', '/r']);
 const handoffSeconds = 600;
 const authError = 'Bạn cần xác thực quyền truy cập Narra.';
@@ -121,7 +122,23 @@ async function finishAccess(req, res, url, config) {
 }
 
 async function forwardPortal(req, res, url, access, config, method = req.method) {
-  const headers = { 'x-narra-session': access.session };
+  if (!access?.session && url.pathname.startsWith('/api/admin/')) {
+    return json(res, 403, { error: 'Thao tác này dành cho Quản trị viên.' });
+  }
+  const headers = {};
+  let visitorCookieValue;
+  if (access?.session) headers['x-narra-session'] = access.session;
+  else {
+    let visitor = readSigned(cookieFrom(req, visitorCookie), config.key)?.visitor;
+    if (!/^[a-f\d]{64}$/.test(visitor ?? '')) {
+      visitor = randomBytes(32).toString('hex');
+      visitorCookieValue = responseCookie(visitorCookie, signedValue({ visitor }, hostSessionSeconds, config.key), hostSessionSeconds);
+      res.setHeader('set-cookie', visitorCookieValue);
+    }
+    headers['x-narra-visitor'] = visitor;
+    const address = req.headers['x-vercel-forwarded-for'] ?? req.socket?.remoteAddress ?? 'unknown';
+    headers['x-narra-rate-key'] = signature(String(address), config.key).toString('hex');
+  }
   const appSession = cookieFrom(req, portalCookie);
   if (/^[a-f\d]{64}$/.test(appSession)) headers.cookie = portalCookie + '=' + appSession;
   let body;
@@ -140,7 +157,7 @@ async function forwardPortal(req, res, url, access, config, method = req.method)
     headers['content-type'] = type;
     headers.origin = config.origin;
   }
-  const upstream = await sitesRequest(config, '/relay' + url.pathname + url.search, { method, headers, body });
+  const upstream = await sitesRequest(config, (access?.session ? '/relay' : '/partner') + url.pathname + url.search, { method, headers, body });
   const proof = upstream.headers.get(relayHeader);
   if (proof === 'expired') {
     res.setHeader('set-cookie', responseCookie(accessCookie, '', 0));
@@ -153,7 +170,7 @@ async function forwardPortal(req, res, url, access, config, method = req.method)
     return writeAsset(res, '/index.html', req.method);
   }
   const cookies = upstream.headers.getSetCookie().filter(value => value.startsWith(portalCookie + '='));
-  if (cookies.length) res.setHeader('set-cookie', cookies);
+  if (cookies.length) res.setHeader('set-cookie', [...(visitorCookieValue ? [visitorCookieValue] : []), ...cookies]);
   send(res, upstream.status, Buffer.from(await upstream.arrayBuffer()), 'application/json; charset=utf-8');
 }
 
@@ -182,14 +199,15 @@ export default async function portal(req, res) {
       url.searchParams.delete('__narra_path');
     }
     if (req.headers.host !== new URL(origin).host) return redirect(res, url.href, 308);
+    url.searchParams.delete('__narra_path');
     const method = req.method;
     if (url.pathname === vercelCallback && method === 'GET') return await finishAccess(req, res, url, config);
     const access = readSigned(cookieFrom(req, accessCookie), config.key);
-    const page = browserPages.has(url.pathname);
-    if (!access?.session) {
-      if (page && method === 'GET') return startAccess(res, url, config.key);
-      if (url.pathname.startsWith('/api/')) return json(res, 401, { error: authError });
-      return send(res, page ? 401 : 404, page ? authError : 'Không tìm thấy trang.');
+    if (url.pathname === '/auth/sites/start' && method === 'GET') {
+      return startAccess(res, new URL('/', origin), config.key);
+    }
+    if (url.pathname === '/api/auth/merchant' && method === 'POST' && !access?.session) {
+      return json(res, 200, { redirect: '/auth/sites/start' });
     }
     if (url.pathname.startsWith('/api/') && ['GET', 'POST'].includes(method)) {
       return await forwardPortal(req, res, url, access, config);
