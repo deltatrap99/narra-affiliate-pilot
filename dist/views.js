@@ -52,7 +52,7 @@ function overviewTitle(ctx) {
 
 function narriWelcome(ctx) {
   const merchant = roleMerchant(ctx);
-  const greeting = merchant ? 'Chào bạn, Narri đây!' : `Chào ${firstName(ctx.partners[0]?.name)}, Narri đây!`;
+  const greeting = merchant ? 'Chào bạn, Narry đây!' : `Chào ${firstName(ctx.partners[0]?.name)}, Narry đây!`;
   const encouragement = merchant
     ? 'Nếu hôm nay có nhiều việc, cứ bắt đầu với những đơn cần xác minh rồi quay lại xem chương trình đang tiến triển thế nào nhé.'
     : 'Mỗi lời giới thiệu đều có thể giúp thêm một người tìm được cách luyện nói phù hợp. Hôm nay, bạn thử bắt đầu với một người bạn đang muốn luyện tiếng Anh nhé.';
